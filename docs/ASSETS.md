@@ -33,9 +33,9 @@ files remain beside the conversion. Rebuild with
 `node scripts/convert-y-wing.mjs`. Original X-wing and Poly Pizza files are
 unmodified. `public/models/manifest.json` records file hashes and provenance.
 
-The rendered Death Star is project-authored Three.js geometry: a 192 × 128
+The rendered Death Star is project-authored Three.js geometry: a 256 × 192
 segmented sphere with a recessed concave superlaser dish, concentric ribs,
-radial dividers, a narrow equatorial trench, and a deterministic 2048 × 1024
+radial dividers, a narrow equatorial trench, and a deterministic 4096 × 2048
 panel/bump map. It replaces the downloaded low-poly reference in both gameplay
 and the cinematic. Trench hull textures remain the generated asset below.
 Ship engine flares, cockpit instrument screens, and the procedural fireball
@@ -51,6 +51,14 @@ or third-party effects are used.
 - `docs/concepts/gameplay.png`: project-generated ImageGen visual reference.
 
 These two images are project-created, not downloaded third-party assets.
+
+## Local Fonts
+
+Oswald Regular and Roboto Condensed Regular/Medium are downloaded from Google
+Fonts and served from `public/fonts/`. Both use the SIL Open Font License 1.1;
+the original notices are retained as `Oswald-OFL.txt` and
+`RobotoCondensed-OFL.txt`. Sources: [Oswald](https://github.com/google/fonts/tree/main/ofl/oswald)
+and [Roboto Condensed](https://github.com/google/fonts/tree/main/ofl/robotocondensed).
 
 ## Asset Validation
 

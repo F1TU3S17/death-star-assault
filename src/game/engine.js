@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { createCampaign } from './campaign.js';
+import { createEnemyBrain, updateEnemyBrain, interceptPoint } from './enemy-ai.js';
 import { SHIPS } from './data.js';
 import { createWorld, createShip, createTurret, createCockpit } from './world.js';
 import { createAudio } from './audio.js';
+import { createRenderPipeline } from './render-pipeline.js';
 import { absorbDamage, segmentSphereHit, clampFrameDelta, createArmament, insideLockCone, steerDirection, splashDamage, getPowerProfile, createRepairSystem, createSupportSystem } from './simulation.js';
 
 const FORWARD = new THREE.Vector3(0, 0, -1);
@@ -31,21 +33,30 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.65));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.25;
+  renderer.toneMappingExposure = 1.05;
+  if (renderer.shadowMap) { renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; }
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x040811);
   scene.fog = new THREE.FogExp2(0x060b16, 0.000018);
   const camera = new THREE.PerspectiveCamera(63, 1, 0.08, 24000);
   scene.add(camera);
-  const ambient = new THREE.HemisphereLight(0xb5ceec, 0x2e3345, 2.2);
+  const ambient = new THREE.HemisphereLight(0xc4d0de, 0x555961, 1.1);
   scene.add(ambient);
-  const keyLight = new THREE.DirectionalLight(0xf2e9d3, 3.5);
+  const keyLight = new THREE.DirectionalLight(0xf2e9d3, 3);
   keyLight.position.set(-2000, 3000, 2500);
   scene.add(keyLight);
-  const rimLight = new THREE.DirectionalLight(0x7e99d8, 1.4);
+  keyLight.castShadow = true;
+  const shadowResolution = window.innerWidth < 760 ? 768 : 1536;
+  keyLight.shadow.mapSize.set(shadowResolution, shadowResolution);
+  Object.assign(keyLight.shadow.camera, { left: -160, right: 160, top: 160, bottom: -160, near: 100, far: 2200 });
+  keyLight.shadow.bias = -0.00015;
+  keyLight.shadow.normalBias = 0.35;
+  scene.add(keyLight.target);
+  const rimLight = new THREE.DirectionalLight(0xaab8ce, 0.45);
   rimLight.position.set(1000, -300, -2000);
   scene.add(rimLight);
   const world = createWorld(scene);
+  const renderPipeline = createRenderPipeline(renderer, scene, camera);
   const audio = createAudio();
   const campaign = createCampaign('episode4');
   const shipDefinitions = Array.isArray(ships) ? Object.fromEntries(ships.map(ship => [ship.id, ship])) : ships;
@@ -154,6 +165,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     const width = canvas.clientWidth || window.innerWidth;
     const height = canvas.clientHeight || window.innerHeight;
     renderer.setSize(width, height, false);
+    renderPipeline.resize(width, height);
     camera.aspect = width / Math.max(1, height);
     camera.updateProjectionMatrix();
   }
@@ -186,7 +198,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   function spawnTie(position, variant = 'line') {
     const mesh = createShip(variant === 'vader' ? 'vader' : 'tie', variant === 'vader' ? undefined : DEFAULT_MODELS.tie);
     mesh.position.copy(position);
-    const targetDirection = player.position.clone().sub(position).normalize();
+    const targetDirection = campaign.getSnapshot().phase === 'trench' ? FORWARD.clone() : player.position.clone().sub(position).normalize();
     mesh.quaternion.setFromUnitVectors(FORWARD, targetDirection);
     scene.add(mesh);
     const entity = {
@@ -194,6 +206,9 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       velocity: new THREE.Vector3(), fireTimer: 1.2 + Math.random() * 1.6,
       seed: Math.random() * 20, stun: 0, evade: 0,
     };
+    entity.brain = createEnemyBrain(variant, entity.seed);
+    entity.aiState = 'approach';
+    entity.aiTarget = 'player';
     enemies.push(entity);
     return entity;
   }
@@ -299,6 +314,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     return {
       x: temporary.x * 0.5 + 0.5, y: 0.5 - temporary.y * 0.5,
       distance: Math.round(enemy.mesh.position.distanceTo(player.position)), kind: enemy.kind,
+      variant: enemy.variant, aiState: enemy.aiState || 'tracking', telegraph: Boolean(enemy.telegraph),
     };
   }
 
@@ -359,7 +375,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       sideObjectives: state.sideObjectives || [],
       enemies: enemies.map(enemy => {
         const relative = enemy.mesh.position.clone().sub(player.position).applyQuaternion(player.quaternion.clone().invert());
-        return { bearing: Math.atan2(relative.x, -relative.z), distance: relative.length(), kind: enemy.kind };
+        return { bearing: Math.atan2(relative.x, -relative.z), distance: relative.length(), kind: enemy.kind, aiState: enemy.aiState || 'tracking', aiTarget: enemy.aiTarget || 'player', telegraph: Boolean(enemy.telegraph), evading: Boolean(enemy.evading) };
       }),
       radio: state.radio, reason: state.reason || '', muted: audio.muted,
       position: { x: player.position.x, y: player.position.y, z: player.position.z },
@@ -658,9 +674,13 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   function updateEnemies(dt) {
     const phase = campaign.getSnapshot().phase;
     const retired = [];
+    const incoming = projectiles.filter(bolt => bolt.owner !== 'enemy').map(bolt => ({ owner: bolt.owner, position: bolt.mesh.position, velocity: bolt.velocity }));
     for (const enemy of enemies) {
       if (enemy.kind === 'relay') continue;
       if (enemy.retreat) {
+        enemy.aiState = 'retreat';
+        enemy.telegraph = false;
+        enemy.mesh.userData.attackTelegraph = false;
         enemy.velocity.set(65, 30, 180);
         enemy.mesh.position.addScaledVector(enemy.velocity, dt);
         enemy.mesh.quaternion.setFromUnitVectors(FORWARD, enemy.velocity.clone().normalize());
@@ -668,40 +688,63 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
         continue;
       }
       enemy.stun = Math.max(0, enemy.stun - dt);
-      if (enemy.stun > 0) { enemy.mesh.rotation.z += dt * 0.5; continue; }
-      const allyTarget = ['escort', 'defend'].includes(phase) && allies.length ? allies[Math.floor(enemy.seed) % allies.length] : null;
+      if (enemy.stun > 0) { enemy.aiState = 'disabled'; enemy.telegraph = false; enemy.mesh.userData.attackTelegraph = false; enemy.velocity.set(0, 0, 0); enemy.mesh.rotation.z += dt * 0.5; continue; }
+      const engagePlayer = enemy.variant === 'ace' && enemy.mesh.position.distanceTo(player.position) < 300;
+      const allyTarget = ['escort', 'defend'].includes(phase) && allies.length && !engagePlayer ? allies[Math.floor(enemy.seed) % allies.length] : null;
       const targetPosition = allyTarget?.mesh.position || player.position;
-      const direction = targetPosition.clone().sub(enemy.mesh.position);
-      const distance = direction.length();
-      direction.normalize();
+      const targetVelocity = allyTarget?.velocity || FORWARD.clone().applyQuaternion(player.quaternion).multiplyScalar(speed);
+      const distance = targetPosition.distanceTo(enemy.mesh.position);
+      const previousTelegraph = enemy.telegraph;
+      enemy.aiTarget = allyTarget?.id || 'player';
+      let direction;
+      let shouldFire = false;
       enemy.fireTimer -= dt;
       if (enemy.kind === 'tie' || enemy.kind === 'vader') {
-        let desired = direction.clone();
-        if (phase === 'trench') {
-          desired.set(Math.sin(totalElapsed + enemy.seed) * 0.04, 0, -1).normalize();
-        } else if (distance < 125) {
-          desired.add(new THREE.Vector3(Math.sin(enemy.seed) * 1.2, 0.45, 0.5)).normalize();
-        }
-        if (enemy.variant === 'ace' && distance < 400) desired.x += Math.sin(totalElapsed * 1.4 + enemy.seed) * 0.28;
-        desired.normalize();
-        const orientation = new THREE.Quaternion().setFromUnitVectors(FORWARD, desired);
-        enemy.mesh.quaternion.slerp(orientation, Math.min(1, dt * (enemy.variant === 'ace' ? 2 : 1.2)));
-        enemy.velocity.copy(FORWARD).applyQuaternion(enemy.mesh.quaternion).multiplyScalar(phase === 'trench' ? stats.speed * (enemy.kind === 'vader' ? 1.03 : 0.85) : enemy.variant === 'ace' ? 68 : 48 + Math.sin(enemy.seed) * 12);
+        const decision = updateEnemyBrain(enemy.brain, {
+          position: enemy.mesh.position,
+          forward: FORWARD.clone().applyQuaternion(enemy.mesh.quaternion),
+          velocity: enemy.velocity,
+          target: { id: enemy.aiTarget, position: targetPosition, velocity: targetVelocity },
+          neighbors: [...enemies.filter(other => other !== enemy), ...allies].map(other => ({ position: other.mesh.position })),
+          projectiles: incoming,
+          corridor: phase === 'trench' ? { minX: -56, maxX: 56, minY: -112, maxY: 25 } : null,
+          cruiseSpeed: phase === 'trench' ? stats.speed * (enemy.kind === 'vader' ? 1.03 : 0.85) : undefined,
+        }, dt);
+        const heading = new THREE.Vector3(decision.direction.x, decision.direction.y, decision.direction.z);
+        enemy.mesh.quaternion.setFromUnitVectors(FORWARD, heading);
+        enemy.velocity.copy(heading).multiplyScalar(decision.speed);
         enemy.mesh.position.addScaledVector(enemy.velocity, dt);
-        if (enemy.mesh.position.distanceTo(player.position) > 2300) {
-          enemy.mesh.position.copy(player.position).addScaledVector(FORWARD.clone().applyQuaternion(player.quaternion), 700);
-          enemy.mesh.position.x += Math.sin(enemy.seed) * 180;
-        }
+        direction = new THREE.Vector3(decision.aimDirection.x, decision.aimDirection.y, decision.aimDirection.z);
+        shouldFire = decision.fire;
+        enemy.aiState = decision.state;
+        enemy.telegraph = decision.telegraph;
+        enemy.evading = decision.evading;
+        enemy.aiAim = decision.aimDirection;
       } else {
-        enemy.mesh.userData.head?.lookAt(targetPosition);
+        const prediction = interceptPoint(enemy.mesh.position, targetPosition, targetVelocity, enemy.variant === 'heavy' ? 310 : 245, 1.1);
+        direction = new THREE.Vector3(prediction.x, prediction.y, prediction.z).sub(enemy.mesh.position).normalize();
+        const head = enemy.mesh.userData.head;
+        const desired = new THREE.Quaternion().setFromUnitVectors(FORWARD, direction);
+        head?.quaternion.rotateTowards(desired, dt * (enemy.variant === 'heavy' ? 0.55 : 0.9));
+        const aligned = !head || FORWARD.clone().applyQuaternion(head.quaternion).dot(direction) >= Math.cos(0.18);
+        enemy.telegraph = enemy.fireTimer <= 0.7 && aligned && distance < 1500;
+        enemy.aiState = enemy.telegraph ? 'telegraph' : 'tracking';
+        shouldFire = enemy.fireTimer <= 0 && aligned && distance < 1500;
       }
-      if (enemy.fireTimer <= 0 && distance < 1500 && phase !== 'qte') {
-        // Imperfect aim and visible travel time allow real evasive manoeuvres.
-        const scatter = allyTarget ? 0.19 : enemy.variant === 'ace' ? 0.075 : 0.095;
+      if (enemy.telegraph && !previousTelegraph) onEvent({ type: 'enemy-attack', variant: enemy.variant, targetId: enemy.aiTarget });
+      enemy.mesh.userData.attackTelegraph = Boolean(enemy.telegraph);
+      if (shouldFire && phase !== 'qte') {
+        // Prediction follows observed velocity; aim error and visible bolts still allow evasion.
+        const scatter = enemy.variant === 'ace' ? 0.045 : 0.065;
         direction.add(new THREE.Vector3((Math.random() - 0.5) * scatter, (Math.random() - 0.5) * scatter, (Math.random() - 0.5) * scatter)).normalize();
+        const barrel = enemy.kind === 'turret' ? enemy.mesh.userData.head : enemy.mesh;
+        const barrelDirection = FORWARD.clone().applyQuaternion(barrel?.quaternion || enemy.mesh.quaternion);
+        const coneAim = steerDirection(barrelDirection, direction, 0.2);
+        direction.set(coneAim.x, coneAim.y, coneAim.z);
         const damage = enemy.kind === 'turret' ? (enemy.variant === 'heavy' ? 24 : 14) * (relayBonus ? 0.65 : 1) : enemy.kind === 'vader' ? 13 : allyTarget ? 6 : 10;
         fireBolt(enemy.mesh.position.clone().addScaledVector(direction, 14), direction, 'enemy', damage, enemy.variant === 'heavy' ? 310 : 245);
         audio.enemyLaser?.();
+        enemy.lastShotAt = totalElapsed;
         enemy.fireTimer = (enemy.kind === 'turret' ? (enemy.variant === 'heavy' ? 2.3 : 2.8) * (relayBonus ? 1.4 : 1) : enemy.kind === 'vader' ? 1.8 : enemy.variant === 'ace' ? 1.7 + Math.random() : 2.2 + Math.random() * 1.8) * (allyTarget ? 0.95 : 0.8);
       }
       if (enemy.mesh.position.distanceTo(player.position) < 15 && collisionCooldown === 0) {
@@ -884,12 +927,18 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     if (emitTimer >= 0.1) { emitTimer = 0; emitSnapshot(); }
   }
 
+  function drawFrame() {
+    keyLight.position.copy(player.position).add(temporary.set(-800, 1100, 500));
+    keyLight.target.position.copy(player.position);
+    renderPipeline.render();
+  }
+
   function frame(now) {
     if (disposed) return;
     const delta = clampFrameDelta((now - lastFrame) / 1000);
     lastFrame = now;
     update(delta);
-    renderer.render(scene, camera);
+    drawFrame();
     frameId = requestAnimationFrame(frame);
   }
 
@@ -1126,7 +1175,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       playerBoltMaterial.dispose(); enemyBoltMaterial.dispose(); ionBoltMaterial.dispose();
       boltHalos.forEach(material => material.dispose());
       effectMaterials.forEach(material => material.dispose());
-      renderer.dispose(); audio.dispose();
+      renderPipeline.dispose(); renderer.dispose(); audio.dispose();
       if (window.__gameDebug?.game === api) delete window.__gameDebug;
     },
   };
@@ -1137,7 +1186,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     snapshot: getSnapshot,
     inspect: () => ({
       mode, phase: campaign.getSnapshot().phase, projectiles: projectiles.length,
-      enemies: enemies.map(enemy => ({ kind: enemy.kind, variant: enemy.variant, health: enemy.health, stunned: enemy.stun, retreat: Boolean(enemy.retreat), position: enemy.mesh.position.toArray(), model: enemy.mesh.userData.modelStatus })),
+      enemies: enemies.map(enemy => ({ kind: enemy.kind, variant: enemy.variant, health: enemy.health, stunned: enemy.stun, retreat: Boolean(enemy.retreat), position: enemy.mesh.position.toArray(), quaternion: enemy.mesh.quaternion.toArray(), velocity: enemy.velocity.toArray(), aiState: enemy.aiState || 'tracking', aiTarget: enemy.aiTarget || 'player', telegraph: Boolean(enemy.telegraph), evading: Boolean(enemy.evading), lastShotAt: enemy.lastShotAt ?? null, aimDirection: enemy.aiAim ? [enemy.aiAim.x, enemy.aiAim.y, enemy.aiAim.z] : null, model: enemy.mesh.userData.modelStatus })),
       allies: allies.map(ally => ({ id: ally.id, name: ally.name, kind: ally.kind, health: ally.health, shields: ally.shields, position: ally.mesh.position.toArray(), velocity: ally.velocity.toArray() })),
       supportWingmen: supportWingmen.map(wingman => ({ id: wingman.id, position: wingman.mesh.position.toArray(), life: wingman.life, targetPosition: wingman.target?.mesh.position.toArray() || null })),
       sfoilsRig: shipMesh.userData.sfoils ? { ...shipMesh.userData.sfoils } : null,
@@ -1148,6 +1197,8 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       projectileDetails: projectiles.map(projectile => ({ type: projectile.type || 'laser', owner: projectile.owner, damage: projectile.damage, locked: Boolean(projectile.target), position: projectile.mesh.position.toArray(), velocity: projectile.velocity.toArray() })),
       playerModel: shipMesh.userData.modelStatus, playerModelUrl: shipMesh.userData.modelUrl,
       camera: cameraMode, renderCalls: renderer.info.render.calls,
+      renderStats: { ...renderer.info.render },
+      graphics: renderPipeline.inspect(), worldGraphics: world.graphics || null,
     }),
     advanceMission() {
       const state = campaign.getSnapshot();
@@ -1167,7 +1218,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       return getSnapshot();
     },
     damage: damagePlayer,
-    step(seconds) { const count = Math.ceil(Math.min(30, Math.max(0, seconds)) / 0.025); for (let i = 0; i < count; i++) update(0.025); renderer.render(scene, camera); return getSnapshot(); },
+    step(seconds) { const count = Math.ceil(Math.min(30, Math.max(0, seconds)) / 0.025); for (let i = 0; i < count; i++) update(0.025); drawFrame(); return getSnapshot(); },
     input(code, held = true) { held ? keys.add(code) : keys.delete(code); },
   };
 

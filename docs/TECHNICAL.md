@@ -19,6 +19,9 @@ src/game/simulation.js     Pure mission/combat/QTE helpers; no DOM or Three impo
 src/game/data.js           Ship/episode/mission configuration (plain exported data)
 src/game/campaign.js       Pure campaign progression and QTE state machine
 src/game/world.js          Model loading, station geometry and cinematic sets
+src/game/world-detail.js   Seeded instanced trench panels, pipes and normal maps
+src/game/render-pipeline.js HDR bloom, FXAA, output transform and subtle vignette
+src/game/enemy-ai.js       Pure finite-state attack passes and observed interception
 src/game/audio.js          Original synthesized Web Audio effects
 public/models/             Downloaded local GLB/OBJ/MTL and textures
 docs/ASSETS.md             Exact sources, authors, licenses and model orientation
@@ -85,6 +88,12 @@ Use delta time with a maximum frame step of 0.05 seconds. Flight uses quaternion
 TIE fighters pursue/intercept and fire at the player with visible bolts. Segment/sphere weapon checks prevent tunnelling; shields absorb damage before hull damage. Campaign order is 5 TIE kills, 4 gun batteries with 2 optional relays, 3 physical escort checkpoints, protection of Wedge while destroying 4 pursuers, 6 trench gates, a four-step targeting QTE, and a 12-second cinematic. Missed gates require another approach; wall/floor impacts damage the ship. Final targeting QTE supports retries. The cinematic shows Luke's X-wing, two torpedoes bending down a narrow shaft, the orbital explosion, and escape from a shockwave. A Y-wing sortie transfers control to Luke's X-wing for the final targeting stage; restart restores the originally selected ship.
 
 Downloaded models load asynchronously; failure preserves play with clearly documented geometric fallback. Include local textures/materials and keep every source/license in `docs/ASSETS.md`. No silent remote hotlinks. Cap pixel ratio to 1.5–2, reuse geometry/materials, pool frequent effects, and keep explosions finite.
+
+## Rendering and fighter AI
+
+The renderer uses a half-float HDR composer at CSS viewport resolution, thresholded bloom, FXAA, output tone mapping and a restrained vignette. A moving directional light provides PCF shadows around the player. Shared instanced geometry adds 23,256 trench details in seven batches; only selected structural batches cast shadows. Generated panel normals and compact engine cores add depth without lengthening the exhaust. Resources are disposed once, including generated maps and late asynchronous texture loads. The DOM HUD remains outside postprocessing. Local OFL fonts avoid network requests and fallback-dependent layout.
+
+Enemy brains use approach, telegraph, attack, break and reposition states with finite turn rates and firing cones. Their physical bolts lead observed target velocity. Evasion requires a visible approaching projectile and a reaction delay; aces react sooner. Escort attackers prioritize vulnerable allies, while corridor avoidance prevents trench reversals. Health and projectile damage are unchanged by this AI revision. Debug inspection reports attack states, targets, renderer statistics and world instance counts; tests verify finite transforms, interception, reaction windows and playable campaign progression.
 
 ## Verification and references
 

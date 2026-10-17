@@ -25,7 +25,7 @@ async function findBrowser() {
 
 // Uses an existing browser and build; never downloads browsers during a test run.
 test('browser renders downloaded models and supports controls, QTE, defeat/replay and victory', {
-  timeout: 120000,
+  timeout: 180000,
 }, async t => {
   const root = resolve(fileURLToPath(new URL('../dist/', import.meta.url)));
   const executable = await findBrowser();
@@ -82,9 +82,19 @@ test('browser renders downloaded models and supports controls, QTE, defeat/repla
     const errors = [];
     const renderingErrors = [];
     const failedResources = [];
+    const frameMetrics = {};
     const output = process.env.GAME_SCREENSHOT_DIR || resolve(tmpdir(), 'death-star-assault-qa');
     await mkdir(output, { recursive: true });
-    const screenshot = name => page.screenshot({ path: resolve(output, `${name}.png`), fullPage: true });
+    const screenshot = async name => {
+      await page.evaluate(() => document.fonts.ready.then(() => true));
+      const frame = await page.evaluate(() => window.__gameDebug.inspect());
+      assert.ok(frame.graphics.enabled && frame.graphics.hdr && frame.graphics.bloom && frame.graphics.antialias === 'FXAA');
+      assert.ok(frame.renderStats.calls > 0 && frame.renderStats.triangles > 0);
+      assert.ok(Object.values(frame.renderStats).every(value => Number.isFinite(value) && value >= 0));
+      for (const values of [frame.playerPosition, frame.playerQuaternion, frame.cameraPosition, frame.cameraQuaternion, ...frame.enemies.map(enemy => enemy.position)]) assert.ok(values.every(Number.isFinite));
+      if (['gameplay', 'trench', 'cockpit', 'hud-mobile'].includes(name)) frameMetrics[name] = { calls: frame.renderStats.calls, triangles: frame.renderStats.triangles, points: frame.renderStats.points, width: frame.graphics.width, height: frame.graphics.height };
+      return page.screenshot({ path: resolve(output, `${name}.png`), fullPage: true });
+    };
     const reachPhase = async phase => {
       await page.evaluate(desired => {
         for (let guard = 0; guard < 12 && window.__gameDebug.snapshot().phase !== desired; guard++) window.__gameDebug.advanceMission();
@@ -103,6 +113,8 @@ test('browser renders downloaded models and supports controls, QTE, defeat/repla
     await page.locator('[data-ship="ywing"]').click();
     await page.waitForFunction(() => window.__gameDebug.inspect().playerModel === 'loaded' && window.__gameDebug.snapshot().shipId === 'ywing');
     await page.locator('#start').click();
+    assert.equal(await page.locator('#tactics').evaluate(element => element.open), false);
+    await page.locator('#tactics summary').click();
     assert.equal(await page.evaluate(() => window.__gameDebug.inspect().orbitalStationVisible), true);
     assert.equal(await page.locator('#radio-avatar').getAttribute('aria-label'), 'Красный Лидер');
     const portrait = await page.evaluate(async () => {
@@ -119,6 +131,7 @@ test('browser renders downloaded models and supports controls, QTE, defeat/repla
     }
     await page.locator('[data-power="balanced"]').click();
     assert.equal(await page.evaluate(() => window.__gameDebug.snapshot().powerMode), 'balanced');
+    await page.locator('#tactics summary').click();
     await page.waitForFunction(() => window.__qaAudioContexts[0]?.state === 'running');
     await page.waitForFunction(() => window.__gameDebug.inspect().enemies.every(enemy => enemy.model === 'loaded'));
     await page.keyboard.press('c');
@@ -252,6 +265,7 @@ test('browser renders downloaded models and supports controls, QTE, defeat/repla
     await page.locator('[data-ship="xwing"]').click();
     await page.waitForFunction(() => window.__gameDebug.inspect().sfoilsRig?.loadedRig);
     await page.locator('#start').click();
+    if (!await page.locator('#tactics').evaluate(element => element.open)) await page.locator('#tactics summary').click();
     assert.equal(await page.locator('#repair').isDisabled(), true, 'Full hull must not consume a repair charge');
     // A damage fixture exercises the actual repair button and damage interruption UI.
     await page.evaluate(() => window.__gameDebug.damage(125));
@@ -307,10 +321,13 @@ test('browser renders downloaded models and supports controls, QTE, defeat/repla
     await screenshot('hud-mobile');
     const weaponPanel = await page.locator('#weapon-panel').boundingBox();
     assert.ok(weaponPanel.x >= 0 && weaponPanel.x + weaponPanel.width <= 390 && weaponPanel.y >= 0 && weaponPanel.y + weaponPanel.height <= 844, 'Mobile weapon controls must remain inside the viewport');
+    await page.evaluate(() => window.__gameDebug.game.dispose());
+    await page.close();
     const touchPage = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     touchPage.on('pageerror', error => errors.push(error.message));
     await touchPage.goto(`http://127.0.0.1:${server.address().port}`, { waitUntil: 'networkidle' });
     await touchPage.waitForFunction(() => window.__gameDebug?.inspect().playerModel === 'loaded');
+    await touchPage.evaluate(() => document.fonts.ready.then(() => true));
     await touchPage.locator('#start').tap();
     assert.equal(await touchPage.locator('.touch-controls').isVisible(), true);
     const fireButton = await touchPage.locator('[data-hold="Space"]').boundingBox();
@@ -334,6 +351,7 @@ test('browser renders downloaded models and supports controls, QTE, defeat/repla
     assert.deepEqual(errors, []);
     assert.deepEqual(renderingErrors, []);
     assert.deepEqual(failedResources, []);
+    t.diagnostic(`Composed frame metrics: ${JSON.stringify(frameMetrics)}`);
     t.diagnostic(`Visual QA images: ${output}`);
   } finally {
     await browser?.close();

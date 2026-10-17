@@ -1,3 +1,6 @@
+@font-face { font-family: 'Oswald'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/oswald-regular.ttf') format('truetype'); }
+@font-face { font-family: 'Roboto Condensed'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/roboto-condensed-regular.ttf') format('truetype'); }
+@font-face { font-family: 'Roboto Condensed'; font-style: normal; font-weight: 500 700; font-display: swap; src: url('/fonts/roboto-condensed-medium.ttf') format('truetype'); }
 :root {
   font-family: 'Roboto Condensed','Arial Narrow',Arial,sans-serif;
   color: #e8e3d4;
@@ -2063,4 +2066,19 @@ body[data-mode=qte]::after { bottom: 0; }
   * {
     transition:none!important
   }
+}
+
+/* Flight HUD follows the original cinematic concept without hiding weapon controls. */
+@media(min-width:1101px) {
+  .mission-title { font-weight: 400; font-size: 19px; letter-spacing: 4px; }
+  .mission-panel p { font-size: 15px; }
+  .radio-panel { width: 46%; bottom: 32px; }
+  .radio-message { padding: 9px 13px; background: #06090db0; border-color: #9ba9ae45; }
+  .radio-message strong { letter-spacing: 2px; font-size: 11px; }
+  .radio-message p { font-size: 13px; }
+  .flight-telemetry { width: 263px; }
+  .meter { height: 6px; }
+  .weapon-panel { width: 235px; border-color: #7894aa35; background: #05080c85; }
+  .tactics-panel { width: 235px; background: #05080c85; }
+  .key-hints { letter-spacing: 2px; }
 }

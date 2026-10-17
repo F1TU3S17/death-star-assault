@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { createXWingSfoilRig } from './sfoils.js';
+import { addTrenchDetail, panelNormalTexture } from './world-detail.js';
 
 const silver = new THREE.MeshStandardMaterial({ color: 0xa3a9b0, roughness: 0.82, metalness: 0.35 });
 const dark = new THREE.MeshStandardMaterial({ color: 0x242c38, roughness: 0.72, metalness: 0.65 });
@@ -10,7 +11,7 @@ const glow = new THREE.MeshBasicMaterial({ color: 0xff80d6 });
 const glass = new THREE.MeshStandardMaterial({ color: 0x111a28, metalness: 0.8, roughness: 0.15 });
 const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
 const engineRoots = new Set();
-const plumeGeometry = new THREE.ConeGeometry(0.78, 7.5, 12, 8, true);
+const plumeGeometry = new THREE.ConeGeometry(0.46, 2.2, 20, 8, true);
 let glowTexture;
 function radialGlowTexture() {
   if (glowTexture) return glowTexture;
@@ -33,6 +34,7 @@ function addEngineLights(root, kind) {
   if (kind === 'tie' || kind === 'vader') return;
   root.userData.engineMaterials = [];
   root.userData.engineNodes = [];
+  root.userData.engineGlows = [];
   root.userData.engineBoost = 0;
   engineRoots.add(root);
   const points = kind === 'ywing'
@@ -51,9 +53,9 @@ function addEngineLights(root, kind) {
         void main() {
           vUv = uv;
           vec3 p = position;
-          float tail = (p.y + 3.75) / 7.5;
-          p.xz *= 1.0 + boost * 0.34 + sin(time * 31.0 + seed + tail * 12.0) * tail * 0.07;
-          p.y = (p.y + 3.75) * (1.0 + boost * 0.75) - 3.75;
+          float tail = (p.y + 1.1) / 2.2;
+          p.xz *= 1.0 + boost * 0.17 + sin(time * 31.0 + seed + tail * 12.0) * tail * 0.035;
+          p.y = (p.y + 1.1) * (1.0 + boost * 0.6) - 1.1;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
         }`,
       fragmentShader: `
@@ -70,21 +72,28 @@ function addEngineLights(root, kind) {
           vec2 flow = vec2(vUv.x * 7.0 + seed, vUv.y * 10.0 - time * (9.0 + boost * 10.0));
           float turbulence = noise(flow) * 0.67 + noise(flow * 2.3) * 0.33;
           float core = pow(1.0 - vUv.y, 2.0);
-          vec3 plasma = mix(vec3(0.48, 0.035, 0.8), vec3(1.5, 0.12, 0.53), turbulence);
-          plasma = mix(plasma, vec3(2.3, 1.65, 2.05), core * 0.87);
+          vec3 plasma = mix(vec3(0.35, 0.015, 0.38), vec3(1.15, 0.12, 0.53), turbulence);
+          plasma = mix(plasma, vec3(1.8, 0.9, 1.45), core * 0.7);
           float flicker = 0.88 + 0.12 * sin(time * 47.0 + seed);
-          float alpha = pow(1.0 - vUv.y, 0.65) * (0.38 + turbulence * 0.48) * flicker;
-          gl_FragColor = vec4(plasma * (1.0 + boost * 0.35), alpha);
+          float alpha = pow(1.0 - vUv.y, 1.35) * (0.12 + turbulence * 0.16 + boost * 0.07) * flicker;
+          gl_FragColor = vec4(plasma * (1.0 + boost * 0.15), alpha);
         }`,
     });
     const plume = new THREE.Mesh(plumeGeometry, plasma);
     plume.rotation.x = Math.PI / 2;
-    plume.position.set(point[0], point[1], point[2] + 3.75);
-    if (kind === 'ywing') plume.scale.set(1.5, 1.15, 1.5);
+    plume.position.set(point[0], point[1], point[2] + 1.1);
+    if (kind === 'ywing') plume.scale.set(1.4, 1.05, 1.4);
     root.add(plume);
     root.userData.engineNodes.push({ node: plume, side: Math.sign(point[0]), upper: Math.sign(point[1]) });
     root.userData.engineMaterials.push(plasma);
-    const core = new THREE.Mesh(new THREE.CircleGeometry(kind === 'ywing' ? 0.58 : 0.34, 24), new THREE.MeshBasicMaterial({ color: 0xffdcf4, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false, toneMapped: false, fog: false }));
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: radialGlowTexture(), color: new THREE.Color(1.75, 0.19, 0.81), blending: THREE.AdditiveBlending, transparent: true, opacity: 0.76, depthWrite: false, toneMapped: false, fog: false }));
+    halo.position.set(point[0], point[1], point[2] + 0.08);
+    const haloSize = kind === 'ywing' ? 2.65 : 1.95;
+    halo.scale.setScalar(haloSize);
+    root.add(halo);
+    root.userData.engineNodes.push({ node: halo, side: Math.sign(point[0]), upper: Math.sign(point[1]) });
+    root.userData.engineGlows.push({ node: halo, size: haloSize });
+    const core = new THREE.Mesh(new THREE.CircleGeometry(kind === 'ywing' ? 0.52 : 0.32, 32), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.1, 1.25, 1.75), transparent: true, opacity: 0.97, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false, toneMapped: false, fog: false }));
     core.position.set(...point);
     root.add(core);
     root.userData.engineNodes.push({ node: core, side: Math.sign(point[0]), upper: Math.sign(point[1]) });
@@ -93,6 +102,7 @@ function addEngineLights(root, kind) {
 
 function box(parent, material, x, y, z, sx, sy, sz) {
   const mesh = new THREE.Mesh(boxGeometry, material);
+  mesh.receiveShadow = true;
   mesh.position.set(x, y, z);
   mesh.scale.set(sx, sy, sz);
   parent.add(mesh);
@@ -193,6 +203,7 @@ function loadModel(url) {
 export function createShip(kind = 'xwing', modelUrl, modelOptions = {}) {
   const root = new THREE.Group();
   const fallback = fallbackShip(kind);
+  fallback.traverse(object => { if (object.isMesh) { object.castShadow = true; object.receiveShadow = true; } });
   root.add(fallback);
   root.userData.kind = kind;
   addEngineLights(root, kind);
@@ -222,6 +233,7 @@ export function createShip(kind = 'xwing', modelUrl, modelOptions = {}) {
         hinge.rotation.z = (openness - 1) * side * upper * 0.255;
       }
       sfoilRig?.set(openness);
+      root.userData.sfoils.angles = sfoilRig ? [...sfoilRig.wings.values()].map(hinge => hinge.rotation.z) : [];
     };
   }
   root.userData.modelStatus = modelUrl ? 'loading' : 'fallback';
@@ -229,6 +241,23 @@ export function createShip(kind = 'xwing', modelUrl, modelOptions = {}) {
     loadModel(modelUrl).then(template => {
       if (root.userData.disposed) return;
       const asset = template.clone(true);
+      const tunedMaterials = new Map();
+      asset.traverse(object => {
+        if (!object.isMesh) return;
+        object.castShadow = true;
+        object.receiveShadow = true;
+        const tune = (original) => {
+          if (tunedMaterials.has(original)) return tunedMaterials.get(original);
+          const material = original.clone();
+          if (material.color) material.color.multiplyScalar(kind === 'tie' ? 0.93 : 0.85);
+          if ('roughness' in material) material.roughness = Math.max(0.72, material.roughness * 0.86);
+          if ('metalness' in material) material.metalness = Math.min(0.48, material.metalness);
+          if ('emissiveIntensity' in material) material.emissiveIntensity = Math.min(0.18, material.emissiveIntensity);
+          tunedMaterials.set(original, material);
+          return material;
+        };
+        object.material = Array.isArray(object.material) ? object.material.map(tune) : tune(object.material);
+      });
       if (modelOptions.rotation) asset.rotation.set(...modelOptions.rotation);
       asset.updateMatrixWorld(true);
       const bounds = new THREE.Box3().setFromObject(asset);
@@ -261,29 +290,52 @@ export function createShip(kind = 'xwing', modelUrl, modelOptions = {}) {
 
 function makeSurfaceTexture() {
   const canvas = document.createElement('canvas');
-  canvas.width = 2048;
-  canvas.height = 1024;
+  canvas.width = 4096;
+  canvas.height = 2048;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#616771';
-  ctx.fillRect(0, 0, 2048, 1024);
+  ctx.fillStyle = '#4d5862';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   let seed = 42;
   const random = () => { seed = (1664525 * seed + 1013904223) >>> 0; return seed / 4294967296; };
-  for (let i = 0; i < 16000; i++) {
-    const x = Math.floor(random() * 512) * 4;
-    const y = Math.floor(random() * 256) * 4;
-    const value = 70 + Math.floor(random() * 95);
-    ctx.fillStyle = `rgb(${value},${value + 3},${value + 8})`;
-    ctx.fillRect(x, y, 3 + random() * 18, 2 + random() * 5);
+  for (let y = 0; y < canvas.height; y += 32) {
+    let x = -Math.floor(random() * 50);
+    while (x < canvas.width) {
+      const width = 22 + Math.floor(random() * 70);
+      const value = 69 + Math.floor(random() * 22);
+      ctx.fillStyle = '#252e37';
+      ctx.fillRect(x, y, width, 32);
+      ctx.fillStyle = `rgb(${value},${value + 7},${value + 13})`;
+      ctx.fillRect(x + 1, y + 1, width - 2, 29);
+      ctx.fillStyle = '#8a939b';
+      ctx.fillRect(x + 2, y + 2, width - 5, 1);
+      for (let detail = 0; detail < 12; detail++) {
+        const dx = x + 3 + random() * Math.max(1, width - 9);
+        const dy = y + 4 + random() * 22;
+        ctx.fillStyle = detail % 4 === 0 ? '#29333d' : detail % 3 === 0 ? '#7b8790' : '#596670';
+        ctx.fillRect(dx, dy, 1 + random() * Math.min(11, width / 3), 1 + random() * 3);
+      }
+      x += width;
+    }
   }
-  ctx.fillStyle = '#141b25';
-  ctx.fillRect(0, 507, 2048, 8);
-  for (let y = 0; y < 1024; y += 64) ctx.fillRect(0, y, 2048, 1);
+  ctx.fillStyle = '#28323d';
+  for (let y = 0; y < canvas.height; y += 128) ctx.fillRect(0, y, canvas.width, 3);
+  ctx.fillStyle = '#101b27';
+  ctx.fillRect(0, 1018, canvas.width, 12);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
   return texture;
 }
 
 export function createWorld(scene) {
+  let disposed = false;
+  const graphics = {
+    style: 'layered-industrial-metal', phase: 'menu', stationTexture: [4096, 2048],
+    generatedPanelNormal: false, plumeLength: 2.2, boostedPlumeLength: 3.52,
+    roundEngineCores: true, materialTuning: 'per-instance rough metal; 0.85 rebel albedo',
+    trench: null, cinemaTrench: null, stationVisible: true,
+  };
+  scene.userData.worldGraphics = graphics;
   const space = new THREE.Group();
   const surface = new THREE.Group();
   const trench = new THREE.Group();
@@ -300,15 +352,15 @@ export function createWorld(scene) {
   }
   const starsGeometry = new THREE.BufferGeometry();
   starsGeometry.setAttribute('position', new THREE.BufferAttribute(stars, 3));
-  const starfield = new THREE.Points(starsGeometry, new THREE.PointsMaterial({ color: 0xd0ddf5, size: 10, sizeAttenuation: true }));
+  const starfield = new THREE.Points(starsGeometry, new THREE.PointsMaterial({ color: 0xd0ddf5, size: 1.3, sizeAttenuation: false, fog: false, toneMapped: false }));
   scene.add(starfield);
 
   const stationTexture = makeSurfaceTexture();
-  const stationMaterial = new THREE.MeshStandardMaterial({ color: 0xb8c0cb, map: stationTexture, bumpMap: stationTexture, bumpScale: 0.7, roughness: 0.94, metalness: 0.12 });
+  const stationMaterial = new THREE.MeshStandardMaterial({ color: 0x9eaab3, map: stationTexture, bumpMap: stationTexture, bumpScale: 1.5, roughness: 0.91, metalness: 0.28 });
   function deathStar(radius) {
     const group = new THREE.Group();
     const dishNormal = new THREE.Vector3(-0.31, 0.38, 0.87).normalize();
-    const sphereGeometry = new THREE.SphereGeometry(radius, 192, 128);
+    const sphereGeometry = new THREE.SphereGeometry(radius, 256, 192);
     const positions = sphereGeometry.attributes.position;
     const vertex = new THREE.Vector3();
     for (let i = 0; i < positions.count; i++) {
@@ -324,15 +376,15 @@ export function createWorld(scene) {
     const sphere = new THREE.Mesh(sphereGeometry, stationMaterial);
     group.add(sphere);
     const dish = new THREE.Group();
-    const dishMat = new THREE.MeshStandardMaterial({ color: 0x687582, roughness: 0.93, metalness: 0.2, side: THREE.DoubleSide });
+    const dishMat = new THREE.MeshStandardMaterial({ color: 0x65727e, map: stationTexture, bumpMap: stationTexture, bumpScale: radius * 0.00014, roughness: 0.9, metalness: 0.24, side: THREE.DoubleSide });
     const dishRadius = radius * 0.182;
     const dishZ = r => -radius * 0.066 + (r / dishRadius) ** 2 * radius * 0.049;
-    const dishPoints = Array.from({ length: 25 }, (_, i) => new THREE.Vector2(dishRadius * i / 24, dishZ(dishRadius * i / 24)));
-    const bowl = new THREE.Mesh(new THREE.LatheGeometry(dishPoints, 96), dishMat);
+    const dishPoints = Array.from({ length: 65 }, (_, i) => new THREE.Vector2(dishRadius * i / 64, dishZ(dishRadius * i / 64)));
+    const bowl = new THREE.Mesh(new THREE.LatheGeometry(dishPoints, 144), dishMat);
     bowl.rotation.x = Math.PI / 2;
     // Lathe's Y axis becomes local +Z, with the centre sunk into the hull.
     dish.add(bowl);
-    const ribMaterial = new THREE.MeshStandardMaterial({ color: 0x929ba4, roughness: 0.82, metalness: 0.15 });
+    const ribMaterial = new THREE.MeshStandardMaterial({ color: 0x7c8791, roughness: 0.83, metalness: 0.34 });
     for (let i = 1; i <= 6; i++) {
       const r = dishRadius * i / 6;
       const ring = new THREE.Mesh(new THREE.TorusGeometry(r, radius * (i === 6 ? 0.0017 : 0.00065), 5, 96), ribMaterial);
@@ -376,27 +428,34 @@ export function createWorld(scene) {
 
   const textureCopies = [];
   const panelTexture = new THREE.TextureLoader().load('/textures/station-panels.png', texture => {
+    if (disposed) { texture.dispose(); return; }
     for (const copy of textureCopies) { copy.image = texture.image; copy.needsUpdate = true; }
+    const normal = panelNormalTexture(texture.image);
+    for (const [material, repeat] of [[floorMaterial, floorTexture.repeat], [wallMaterial, wallTexture.repeat], [panelMaterial, panelTexture.repeat]]) {
+      material.normalMap = material === panelMaterial ? normal : normal.clone();
+      material.normalMap.repeat.copy(repeat);
+      material.normalScale.setScalar(material === floorMaterial ? 0.45 : 0.65);
+      material.needsUpdate = true;
+    }
+    graphics.generatedPanelNormal = true;
   });
   panelTexture.colorSpace = THREE.SRGBColorSpace;
   panelTexture.wrapS = panelTexture.wrapT = THREE.RepeatWrapping;
   panelTexture.repeat.set(2, 2);
-  panelTexture.anisotropy = 4;
+  panelTexture.anisotropy = 8;
   const floorTexture = panelTexture.clone();
   floorTexture.repeat.set(120, 120);
   const wallTexture = panelTexture.clone();
-  wallTexture.repeat.set(35, 1.1);
+  wallTexture.repeat.set(48, 1.6);
   textureCopies.push(floorTexture, wallTexture);
-  const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x9ca4ac, map: floorTexture, roughness: 0.95, metalness: 0.12 });
-  const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xb7bec6, map: wallTexture, roughness: 0.9, metalness: 0.15 });
-  const panelMaterial = new THREE.MeshStandardMaterial({ color: 0xaab2bd, map: panelTexture, roughness: 0.88, metalness: 0.15 });
+  const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x73818b, map: floorTexture, roughness: 0.88, metalness: 0.38 });
+  const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x929ba2, map: wallTexture, roughness: 0.82, metalness: 0.4 });
+  const panelMaterial = new THREE.MeshStandardMaterial({ color: 0x8e989f, map: panelTexture, roughness: 0.8, metalness: 0.42 });
   const deck = new THREE.Mesh(new THREE.PlaneGeometry(22000, 22000), floorMaterial);
   deck.rotation.x = -Math.PI / 2;
   deck.position.y = -150;
+  deck.receiveShadow = true;
   surface.add(deck);
-  const grid = new THREE.GridHelper(22000, 220, 0x9ba2ad, 0x475362);
-  grid.position.y = -149.9;
-  surface.add(grid);
   const greebleGeometry = new THREE.BoxGeometry(1, 1, 1);
   const greebles = new THREE.InstancedMesh(greebleGeometry, panelMaterial, 650);
   const dummy = new THREE.Object3D();
@@ -410,6 +469,7 @@ export function createWorld(scene) {
     greebles.setMatrixAt(i, dummy.matrix);
   }
   surface.add(greebles);
+  greebles.receiveShadow = true;
 
   // Small fixed sets communicate separate industrial districts. Repeated
   // details share instance buffers instead of creating hundreds of draw calls.
@@ -466,6 +526,8 @@ export function createWorld(scene) {
   }
   function instanceBlocks(entries, material) {
     const mesh = new THREE.InstancedMesh(greebleGeometry, material, entries.length);
+    mesh.castShadow = material === panelMaterial;
+    mesh.receiveShadow = true;
     entries.forEach(([x, y, z, sx, sy, sz], index) => {
       dummy.position.set(x, y, z);
       dummy.rotation.set(0, 0, 0);
@@ -490,6 +552,7 @@ export function createWorld(scene) {
     pipes.setMatrixAt(index, dummy.matrix);
   }
   surface.add(pipes);
+  pipes.receiveShadow = true;
   dummy.rotation.set(0, 0, 0);
 
   const distantBattle = new THREE.Group();
@@ -511,20 +574,13 @@ export function createWorld(scene) {
   });
 
   for (const side of [-1, 1]) {
-    box(trench, wallMaterial, side * 155, -40, -1700, 145, 220, 7000);
-    const wallDetails = new THREE.InstancedMesh(greebleGeometry, panelMaterial, 500);
-    for (let i = 0; i < 500; i++) {
-      dummy.position.set(side * (78 + Math.random() * 9), -130 + Math.random() * 190, 1400 - Math.random() * 6800);
-      dummy.scale.set(2 + Math.random() * 8, 3 + Math.random() * 12, 8 + Math.random() * 45);
-      dummy.updateMatrix();
-      wallDetails.setMatrixAt(i, dummy.matrix);
-    }
-    trench.add(wallDetails);
-    for (let z = 1000; z > -5000; z -= 400) {
-      box(trench, dark, side * 76, -65, z, 6, 110, 18);
-      box(trench, new THREE.MeshBasicMaterial({ color: 0xf1b75e }), side * 73, -30, z, 0.5, 1.5, 12);
-    }
+    const wall = box(trench, wallMaterial, side * 155, -40, -1700, 145, 220, 7000);
+    wall.castShadow = true;
   }
+  graphics.trench = addTrenchDetail(trench, { wallX: 81, floorY: -150, topY: 70, startZ: 1700, endZ: -5100, material: panelMaterial, seed: 1977 });
+  const trenchAccent = new THREE.PointLight(0xffb46d, 110, 180, 2);
+  trenchAccent.position.set(-73, -20, -1700);
+  trench.add(trenchAccent);
   // Small raised exhaust at the end of the actual playable trench.
   const exhaust = new THREE.Group();
   cylinder(exhaust, dark, 13, 3, 0, -65, -3400, 24);
@@ -543,43 +599,13 @@ export function createWorld(scene) {
   cinematic.add(cinemaTrench);
   box(cinemaTrench, floorMaterial, 0, -5, -250, 135, 10, 1900);
   for (const side of [-1, 1]) {
-    box(cinemaTrench, wallMaterial, side * 78, 35, -250, 36, 85, 1900);
-    for (let z = 650; z > -1200; z -= 60) {
-      box(cinemaTrench, dark, side * 59, 24, z, 4, 45, 7);
-      box(cinemaTrench, silver, side * 59, 8, z - 15, 3, 8, 25);
-      box(cinemaTrench, dark, side * 59, 60, z + 20, 5, 9, 26);
-    }
+    const wall = box(cinemaTrench, wallMaterial, side * 78, 35, -250, 36, 85, 1900);
+    wall.castShadow = true;
   }
-  // Recessed service panels and pipes give the close-up rail set real parallax.
-  let railSeed = 1977;
-  const railRandom = () => {
-    railSeed = (Math.imul(railSeed, 1664525) + 1013904223) >>> 0;
-    return railSeed / 4294967296;
-  };
-  for (const side of [-1, 1]) {
-    const panels = new THREE.InstancedMesh(greebleGeometry, panelMaterial, 440);
-    for (let i = 0; i < 440; i++) {
-      dummy.position.set(side * (55 + railRandom() * 4), 3 + railRandom() * 71, 660 - railRandom() * 1840);
-      dummy.scale.set(1 + railRandom() * 3, 1.5 + railRandom() * 9, 4 + railRandom() * 22);
-      dummy.updateMatrix();
-      panels.setMatrixAt(i, dummy.matrix);
-    }
-    cinemaTrench.add(panels);
-    for (const height of [12, 47, 69]) {
-      cylinder(cinemaTrench, dark, 0.75, 1880, side * 56, height, -250, 6);
-    }
-  }
-  const floorPanels = new THREE.InstancedMesh(greebleGeometry, panelMaterial, 180);
-  for (let i = 0; i < 180; i++) {
-    const x = (railRandom() - 0.5) * 105;
-    const z = 650 - railRandom() * 1830;
-    // Keep the actual thermal exhaust clear of raised scenery.
-    dummy.position.set(x, Math.abs(x) < 15 && Math.abs(z + 330) < 22 ? -8 : 0.3, z);
-    dummy.scale.set(3 + railRandom() * 15, 0.5 + railRandom() * 2, 4 + railRandom() * 14);
-    dummy.updateMatrix();
-    floorPanels.setMatrixAt(i, dummy.matrix);
-  }
-  cinemaTrench.add(floorPanels);
+  graphics.cinemaTrench = addTrenchDetail(cinemaTrench, { wallX: 59, floorY: 0, topY: 77, startZ: 650, endZ: -1200, material: panelMaterial, seed: 1983 });
+  const cinemaAccent = new THREE.PointLight(0xffb979, 100, 150, 2);
+  cinemaAccent.position.set(48, 30, 70);
+  cinemaTrench.add(cinemaAccent);
   const vent = new THREE.Group();
   const holeMat = new THREE.MeshBasicMaterial({ color: 0x01040a, side: THREE.DoubleSide });
   const ventHole = new THREE.Mesh(new THREE.CircleGeometry(5.1, 24), holeMat);
@@ -714,6 +740,10 @@ export function createWorld(scene) {
     trench.visible = phase === 'trench';
     cinematic.visible = isCinema || phase === 'qte';
     qtePursuit.visible = phase === 'qte';
+    graphics.phase = phase;
+    graphics.stationVisible = space.visible;
+    graphics.surfaceVisible = surface.visible;
+    graphics.trenchVisible = trench.visible;
     if (phase === 'qte') {
       qteInitialized = false;
       cinemaStation.visible = false;
@@ -743,7 +773,7 @@ export function createWorld(scene) {
   setPhase('menu');
 
   return {
-    space, surface, trench, station, cinematic, checkpoints, setPhase,
+    space, surface, trench, station, cinematic, checkpoints, setPhase, graphics,
     update(time) {
       station.rotation.y = Math.sin(time * 0.02) * 0.04;
       for (const root of engineRoots) {
@@ -752,6 +782,10 @@ export function createWorld(scene) {
         for (const material of root.userData.engineMaterials || []) {
           material.uniforms.time.value = time;
           material.uniforms.boost.value = boost;
+        }
+        for (const { node, size } of root.userData.engineGlows || []) {
+          node.scale.setScalar(size * (1 + boost * 0.12));
+          node.material.opacity = 0.76 + boost * 0.08;
         }
       }
       if (distantBattle.visible) {
@@ -799,6 +833,7 @@ export function createWorld(scene) {
         player.position.y = 15 + Math.sin(time * 2.7) * 0.35;
       }
       player.rotation.set(Math.sin(time * 1.4) * 0.008, -qteBank * 0.13, qteBank);
+      cinemaAccent.position.z = player.position.z - 35;
       lastQtePosition.copy(player.position);
       lastQteRotation.copy(player.rotation);
       for (const fighter of pursuitFighters) {
@@ -910,16 +945,24 @@ export function createWorld(scene) {
       }
     },
     dispose() {
+      if (disposed) return;
+      disposed = true;
+      const geometries = new Set();
+      const materials = new Set();
+      const textures = new Set();
       scene.traverse(object => {
         object.userData.disposed = true;
-        object.geometry?.dispose();
-        const materials = Array.isArray(object.material) ? object.material : [object.material];
-        for (const material of materials) {
+        if (object.geometry) geometries.add(object.geometry);
+        const objectMaterials = Array.isArray(object.material) ? object.material : [object.material];
+        for (const material of objectMaterials) {
           if (!material) continue;
-          material.map?.dispose();
-          material.dispose();
+          materials.add(material);
+          for (const value of Object.values(material)) if (value?.isTexture) textures.add(value);
         }
       });
+      for (const texture of textures) texture.dispose();
+      for (const material of materials) material.dispose();
+      for (const geometry of geometries) geometry.dispose();
       for (const root of engineRoots) if (root.userData.disposed) engineRoots.delete(root);
     },
   };
@@ -965,6 +1008,7 @@ export function createTurret(kind = 'light') {
   root.add(head);
   root.userData.head = head;
   root.userData.kind = kind;
+  root.traverse(object => { if (object.isMesh) { object.castShadow = true; object.receiveShadow = true; } });
   return root;
 }
 
