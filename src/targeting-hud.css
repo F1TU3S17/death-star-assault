@@ -1,0 +1,51 @@
+.targeting-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  color: #ecc17b;
+}
+.targeting-overlay[hidden], .targeting-overlay [hidden] { display: none; }
+.lead-aim-marker {
+  position: absolute;
+  width: 19px;
+  height: 19px;
+  transform: translate(-50%, -50%);
+  color: #a0d3e4;
+  filter: drop-shadow(0 1px 3px #000);
+}
+.lead-aim-marker svg { display: block; width: 100%; height: 100%; stroke: currentColor; stroke-width: 1.3; stroke-linejoin: miter; }
+.torpedo-lock-cue {
+  position: absolute;
+  width: 124px;
+  height: 124px;
+  transform: translate(-50%, -50%);
+}
+.torpedo-lock-ring { display: block; width: 100%; height: 100%; overflow: visible; transform: rotate(-90deg); }
+.torpedo-lock-track { stroke: #ecc17b26; stroke-width: 1; }
+.torpedo-lock-progress { stroke: currentColor; stroke-width: 1.6; stroke-linecap: butt; transition: stroke-dashoffset .1s linear; }
+.torpedo-lock-caption {
+  position: absolute;
+  top: calc(50% + 75px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 220px;
+  color: currentColor;
+  font: 400 9px/1.4 'Roboto Condensed', 'Arial Narrow', Arial, sans-serif;
+  letter-spacing: 1.4px;
+  text-align: center;
+  text-shadow: 0 1px 5px #000, 0 0 12px #000;
+}
+.torpedo-lock-cue[data-status=searching] .torpedo-lock-caption { color: #a0b0b9; font-size: 8px; letter-spacing: 1px; }
+.torpedo-lock-cue[data-status=locked] { color: #e7ecee; }
+.torpedo-lock-cue[data-status=losing] { color: #ed8b79; }
+@media(max-width:760px) {
+  .lead-aim-marker { width: 16px; height: 16px; }
+  .torpedo-lock-cue { width: 112px; height: 112px; }
+  .torpedo-lock-caption { top: calc(50% + 67px); max-width: 178px; font-size: 8px; letter-spacing: 1px; }
+  .torpedo-lock-cue[data-status=searching] .torpedo-lock-caption { font-size: 7px; letter-spacing: .7px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .torpedo-lock-progress { transition: none; }
+}

@@ -8,6 +8,7 @@ import { createWorld, createShip, createTurret, createCockpit } from './world.js
 import { createAudio } from './audio.js';
 import { createRenderPipeline } from './render-pipeline.js';
 import { createSceneLighting } from './scene-lighting.js';
+import { createTargetLock, stationLineOfSight, getLeadSolution } from './targeting.js';
 import { createFlightState, resetFlightState, stepFlight, getFlightTurnAuthority } from './flight-model.js';
 import { absorbDamage, segmentSphereHit, clampFrameDelta, createArmament, insideLockCone, steerDirection, splashDamage, getPowerProfile, createRepairSystem, createSupportSystem } from './simulation.js';
 
@@ -148,6 +149,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   let speed = 0;
   const flight = createFlightState();
   let armament = createArmament(stats.weapons || SHIPS.xwing.weapons);
+  const targetLock = createTargetLock();
   let heat = 0;
   let abilityCooldown = 0;
   let abilityRemaining = 0;
@@ -229,6 +231,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     scene.remove(entity.mesh);
   }
   function clearCombat() {
+    targetLock.reset();
     for (const prop of missionProps) { scene.remove(prop.mesh); prop.dispose(); }
     missionProps.length = 0;
     for (const enemy of enemies) removeEntity(enemy);
@@ -441,15 +444,26 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   }
 
   function findAimTarget(profile = armament.current()) {
+    camera.updateMatrixWorld();
     const forward = FORWARD.clone().applyQuaternion(player.quaternion);
     let best = null;
     let score = profile.lockDot ?? 0.96;
+    const trackedId = targetLock.snapshot().targetId;
     for (const enemy of enemies) {
       if (enemy.health <= 0 || enemy.retreat || !insideLockCone(player.position, forward, enemy.mesh.position, profile.lockDot ?? 0.96, profile.range || 1400)) continue;
+      const projected = projectTarget(enemy);
+      if (!projected || projected.x < 0 || projected.x > 1 || projected.y < 0 || projected.y > 1 || !stationLineOfSight(player.position, enemy.mesh.position, campaign.getSnapshot().phase)) continue;
+      if (enemy.id === trackedId) return enemy;
       const dot = enemy.mesh.position.clone().sub(player.position).normalize().dot(forward);
       if (dot >= score) { best = enemy; score = dot; }
     }
     return best;
+  }
+
+  function updateTargetLock(dt) {
+    const weapon = armament.current();
+    const candidate = weapon.type === 'torpedo' ? findAimTarget(weapon) : null;
+    targetLock.update(candidate?.id, dt, { enabled: weapon.type === 'torpedo' });
   }
 
   function getSnapshot() {
@@ -461,6 +475,9 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     const active = mode !== 'menu';
     const availableWeapons = armament.getSnapshot();
     const selectedWeapon = availableWeapons.find(weapon => weapon.selected);
+    const lock = targetLock.snapshot();
+    const lockCandidate = selectedWeapon.type === 'torpedo' ? findAimTarget() : null;
+    const locked = lock.acquired && lock.targetId === lockCandidate?.id;
     const forward = FORWARD.clone().applyQuaternion(player.quaternion);
     // Project the firing axis through the current camera: the exterior offset,
     // camera lag and cockpit view cannot share a fixed HUD percentage.
@@ -469,6 +486,14 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     const target = enemies.filter(enemy => enemy.health > 0)
       .map(enemy => ({ enemy, dot: enemy.mesh.position.clone().sub(player.position).normalize().dot(forward) }))
       .sort((a, b) => b.dot - a.dot)[0];
+    const displayedTarget = lockCandidate || target?.enemy;
+    const visibleTarget = displayedTarget ? projectTarget(displayedTarget) : null;
+    let lead = null;
+    if (mode === 'playing' && selectedWeapon.type !== 'torpedo' && target?.dot > .8 && displayedTarget?.mesh.position.distanceTo(player.position) <= (selectedWeapon.range || 1400)) {
+      const prediction = getLeadSolution({ origin: player.position, targetPosition: displayedTarget.mesh.position, targetVelocity: displayedTarget.velocity, projectileSpeed: selectedWeapon.speed || 670 }).point;
+      const point = new THREE.Vector3(prediction.x, prediction.y, prediction.z).project(camera);
+      if (point.z > -1 && point.z < 1 && Math.abs(point.x) < 1 && Math.abs(point.y) < 1) lead = { x: point.x * .5 + .5, y: .5 - point.y * .5, targetId: displayedTarget.id };
+    }
     let objectiveMarker = null;
     if (state.phase === 'trench') {
       const checkpoint = world.checkpoints[state.progress];
@@ -494,12 +519,13 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       support: { ...supportSystem.getSnapshot(), active: supportWingmen.length > 0 },
       sfoils: { mode: sfoilsMode, openness: sfoilsOpenness, available: selectedShipId === 'xwing' },
       heat: Math.round(heat * 100), abilityCooldown: Math.max(0, abilityCooldown), abilityActive: abilityRemaining > 0,
-      weapon: { id: selectedWeapon.id, name: selectedWeapon.name, ammo: selectedWeapon.ammo, reserve: selectedWeapon.reserve, cooldown: selectedWeapon.cooldown, reloading: selectedWeapon.reloading, reloadRemaining: selectedWeapon.reloadRemaining, reloadDuration: selectedWeapon.reloadDuration, locked: mode === 'playing' && selectedWeapon.type === 'torpedo' && Boolean(findAimTarget()) },
+      weapon: { id: selectedWeapon.id, name: selectedWeapon.name, ammo: selectedWeapon.ammo, reserve: selectedWeapon.reserve, cooldown: selectedWeapon.cooldown, reloading: selectedWeapon.reloading, reloadRemaining: selectedWeapon.reloadRemaining, reloadDuration: selectedWeapon.reloadDuration, locked, lockProgress: lock.progress, lockStatus: lock.status, lockDuration: lock.duration, lockTargetId: lockCandidate?.id || null, guidance: locked ? 'guided' : 'unguided' },
       weapons: availableWeapons,
       kills, targetCount: enemies.length, elapsed: totalElapsed,
       mission: active ? { ...state.mission, progress: Math.round(state.progress / state.target * 100), count: state.progress, target: state.target } : null,
       qte: mode === 'qte' ? state.qte : null,
-      targeting: target && target.dot > 0.3 ? projectTarget(target.enemy) : null,
+      targeting: visibleTarget && (lockCandidate || target?.dot > .3) ? { ...visibleTarget, id: displayedTarget.id, lockProgress: lockCandidate?.id === lock.targetId ? lock.progress : 0, locked } : null,
+      lead,
       targets: enemies.map(projectTarget).filter(Boolean), objectiveMarker,
       allies: allies.map(ally => ({ id: ally.id, name: ally.name, kind: ally.kind, health: Math.round(ally.health / ally.maxHealth * 100), shields: Math.round(ally.shields / ally.maxShields * 100), distance: Math.round(ally.mesh.position.distanceTo(player.position)), position: { x: ally.mesh.position.x, y: ally.mesh.position.y, z: ally.mesh.position.z } })),
       fleetHealth: allies.length ? Math.round(allies.reduce((total, ally) => total + ally.health / ally.maxHealth, 0) / allies.length * 100) : null,
@@ -580,6 +606,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
 
   function destroyEnemy(enemy) {
     if (!enemies.includes(enemy)) return;
+    targetLock.invalidate(enemy.id);
     if (enemy.kind === 'vader') {
       enemy.health = 1;
       enemy.retreat = true;
@@ -725,12 +752,10 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     }
     if (!armament.consumeShot()) return;
     const forward = FORWARD.clone().applyQuaternion(player.quaternion);
-    const best = findAimTarget(weapon);
+    const candidate = weapon.type === 'torpedo' ? findAimTarget(weapon) : null;
+    const lock = targetLock.snapshot();
+    const best = lock.acquired && lock.targetId === candidate?.id ? candidate : null;
     const direction = forward.clone();
-    if (best && weapon.type !== 'torpedo') {
-      const distance = best.mesh.position.distanceTo(player.position);
-      direction.copy(best.mesh.position).addScaledVector(best.velocity, distance / weapon.speed).sub(player.position).normalize();
-    }
     if (weapon.type === 'torpedo') {
       const mesh = new THREE.Group();
       mesh.add(new THREE.Mesh(torpedoGeometry, torpedoMaterial));
@@ -1092,6 +1117,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
         updateAllies(dt);
         updateSupportWingmen(dt);
         updateEnemies(dt);
+        updateTargetLock(dt);
         updateProjectiles(dt);
         campaign.update(dt);
         syncCampaign();
@@ -1110,7 +1136,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     }
     if (mode !== 'paused') updateCamera(dt);
     shipMesh.userData.engineBoost = mode === 'playing' && (keys.has('ShiftLeft') || keys.has('ShiftRight')) ? 1 : 0;
-    const audioLock = mode === 'playing' && armament.current().type === 'torpedo' ? (findAimTarget() ? 'locked' : 'search') : 'none';
+    const audioLock = mode === 'playing' && armament.current().type === 'torpedo' ? (targetLock.snapshot().acquired && targetLock.snapshot().targetId === findAimTarget()?.id ? 'locked' : 'search') : 'none';
     if (audioLock !== lastAudioLock) {
       if (audioLock !== 'none') audio.lock?.(audioLock);
       else if (lastAudioLock === 'locked') audio.lock?.('lost');
@@ -1254,6 +1280,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     const previous = armament.current().id;
     if (!armament.select(id)) return false;
     const weapon = armament.current();
+    if (weapon.id !== previous) targetLock.reset();
     if (weapon.id !== previous) onEvent({ type: 'weapon-change', weaponId: weapon.id, name: weapon.name });
     emitSnapshot();
     return true;
@@ -1261,6 +1288,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   function cycleWeapon(direction = 1) {
     if (!['menu', 'playing'].includes(mode)) return false;
     const id = armament.cycle(direction);
+    targetLock.reset();
     const weapon = armament.current();
     onEvent({ type: 'weapon-change', weaponId: id, name: weapon.name });
     emitSnapshot();

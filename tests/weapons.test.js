@@ -133,7 +133,24 @@ test('a launched proton torpedo physically homes to a front target and detonates
     const { game, debug } = fixture;
     game.start();
     game.selectWeapon('proton-torpedo');
-    assert.equal(game.getSnapshot().weapon.locked, true);
+    assert.equal(game.getSnapshot().weapon.locked, false, 'a fresh target requires deliberate tracking before guidance');
+    const targetId = game.getSnapshot().weapon.lockTargetId;
+    assert.ok(targetId, 'the initial nose direction should identify the target being tracked');
+    const track = seconds => {
+      for (let elapsed = 0; elapsed < seconds - 0.001; elapsed += 0.025) {
+        const target = debug.inspect().enemies.find(enemy => enemy.id === targetId);
+        assert.ok(target?.health > 0, 'the same live target must remain available while tracking');
+        const direction = new THREE.Vector3(...target.position).sub(fixture.player().position).normalize();
+        fixture.player().quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), direction);
+        debug.step(0.025);
+        assert.equal(game.getSnapshot().weapon.lockTargetId, targetId, 'lock progress must stay bound to the same target');
+      }
+    };
+    track(1.65);
+    assert.equal(game.getSnapshot().weapon.locked, false, 'the torpedo must remain unguided before 1.7 seconds');
+    assert.ok(game.getSnapshot().weapon.lockProgress < 1);
+    track(0.1);
+    assert.equal(game.getSnapshot().weapon.locked, true, 'continuous nose tracking acquires guidance after 1.7 seconds');
     fixture.key('Space'); debug.step(0.025); fixture.key('Space', false);
     const launched = debug.inspect().projectileDetails.find(projectile => projectile.type === 'torpedo');
     assert.ok(launched?.locked);

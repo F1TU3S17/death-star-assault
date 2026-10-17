@@ -245,6 +245,9 @@ test('browser renders downloaded models and supports controls, QTE, defeat/repla
     assert.equal(await page.locator('#weapon-panel').getAttribute('data-weapon'), 'laser');
     await torpedoSlot.click();
     assert.equal(await page.locator('#weapon-panel').getAttribute('data-weapon'), 'proton-torpedo');
+    assert.equal(await page.locator('.torpedo-lock-cue').isVisible(), true);
+    assert.match(await page.locator('.torpedo-lock-caption').innerText(), /ЗАХВАТ|НАВЕДЕНИЯ/);
+    assert.equal(await page.locator('.lead-aim-marker').isVisible(), false, 'torpedo selection must not show a laser lead cue');
     await screenshot('weapon-selected');
     const ammoBefore = await page.evaluate(() => window.__gameDebug.snapshot().weapon.ammo);
     await page.keyboard.down('Space');
