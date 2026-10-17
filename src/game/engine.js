@@ -182,8 +182,8 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     mesh.quaternion.setFromUnitVectors(FORWARD, targetDirection);
     scene.add(mesh);
     const entity = {
-      kind: variant === 'vader' ? 'vader' : 'tie', variant, mesh, health: variant === 'vader' ? 220 : variant === 'ace' ? 58 : 38, radius: variant === 'vader' ? 12 : 10,
-      velocity: new THREE.Vector3(), fireTimer: 1.5 + Math.random() * 2,
+      kind: variant === 'vader' ? 'vader' : 'tie', variant, mesh, health: variant === 'vader' ? 220 : variant === 'ace' ? 68 : 48, radius: variant === 'vader' ? 12 : 10,
+      velocity: new THREE.Vector3(), fireTimer: 1.2 + Math.random() * 1.6,
       seed: Math.random() * 20, stun: 0, evade: 0,
     };
     enemies.push(entity);
@@ -194,7 +194,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     const mesh = createTurret(variant);
     mesh.position.set(x, -115, z);
     scene.add(mesh);
-    enemies.push({ kind: variant === 'relay' ? 'relay' : 'turret', variant, mesh, health: variant === 'relay' ? 35 : variant === 'heavy' ? 120 : 70, radius: variant === 'relay' ? 16 : 22, velocity: new THREE.Vector3(), fireTimer: 2 + Math.random() * 2, seed: Math.random() * 20, stun: 0 });
+    enemies.push({ kind: variant === 'relay' ? 'relay' : 'turret', variant, mesh, health: variant === 'relay' ? 35 : variant === 'heavy' ? 138 : 78, radius: variant === 'relay' ? 16 : 22, velocity: new THREE.Vector3(), fireTimer: 1.6 + Math.random() * 1.6, seed: Math.random() * 20, stun: 0 });
   }
 
   function spawnAlly(id, name, kind, position, damaged = false) {
@@ -334,7 +334,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       health: Math.round(hull / stats.hull * 100), shields: Math.round(shields / stats.shield * 100),
       speed: Math.round(speed), maxSpeed: stats.boostSpeed,
       heat: Math.round(heat * 100), abilityCooldown: Math.max(0, abilityCooldown), abilityActive: abilityRemaining > 0,
-      weapon: { id: selectedWeapon.id, name: selectedWeapon.name, ammo: selectedWeapon.ammo, cooldown: selectedWeapon.cooldown, locked: mode === 'playing' && selectedWeapon.type === 'torpedo' && Boolean(findAimTarget()) },
+      weapon: { id: selectedWeapon.id, name: selectedWeapon.name, ammo: selectedWeapon.ammo, reserve: selectedWeapon.reserve, cooldown: selectedWeapon.cooldown, reloading: selectedWeapon.reloading, reloadRemaining: selectedWeapon.reloadRemaining, reloadDuration: selectedWeapon.reloadDuration, locked: mode === 'playing' && selectedWeapon.type === 'torpedo' && Boolean(findAimTarget()) },
       weapons: availableWeapons,
       kills, targetCount: enemies.length, elapsed: totalElapsed,
       mission: active ? { ...state.mission, progress: Math.round(state.progress / state.target * 100), count: state.progress, target: state.target } : null,
@@ -636,12 +636,12 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       }
       if (enemy.fireTimer <= 0 && distance < 1500 && phase !== 'qte') {
         // Imperfect aim and visible travel time allow real evasive manoeuvres.
-        const scatter = allyTarget ? 0.19 : enemy.variant === 'ace' ? 0.09 : 0.13;
+        const scatter = allyTarget ? 0.19 : enemy.variant === 'ace' ? 0.075 : 0.095;
         direction.add(new THREE.Vector3((Math.random() - 0.5) * scatter, (Math.random() - 0.5) * scatter, (Math.random() - 0.5) * scatter)).normalize();
-        const damage = enemy.kind === 'turret' ? (enemy.variant === 'heavy' ? 24 : 14) * (relayBonus ? 0.65 : 1) : enemy.kind === 'vader' ? 12 : allyTarget ? 6 : 8;
+        const damage = enemy.kind === 'turret' ? (enemy.variant === 'heavy' ? 24 : 14) * (relayBonus ? 0.65 : 1) : enemy.kind === 'vader' ? 13 : allyTarget ? 6 : 10;
         fireBolt(enemy.mesh.position.clone().addScaledVector(direction, 14), direction, 'enemy', damage, enemy.variant === 'heavy' ? 310 : 245);
         audio.enemyLaser?.();
-        enemy.fireTimer = enemy.kind === 'turret' ? (enemy.variant === 'heavy' ? 2.3 : 2.8) * (relayBonus ? 1.4 : 1) : enemy.kind === 'vader' ? 1.8 : enemy.variant === 'ace' ? 1.7 + Math.random() : 2.2 + Math.random() * 1.8;
+        enemy.fireTimer = (enemy.kind === 'turret' ? (enemy.variant === 'heavy' ? 2.3 : 2.8) * (relayBonus ? 1.4 : 1) : enemy.kind === 'vader' ? 1.8 : enemy.variant === 'ace' ? 1.7 + Math.random() : 2.2 + Math.random() * 1.8) * (allyTarget ? 0.95 : 0.8);
       }
       if (enemy.mesh.position.distanceTo(player.position) < 15 && collisionCooldown === 0) {
         damagePlayer(18);
@@ -776,7 +776,13 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     }
     if (mode === 'playing') {
       totalElapsed += dt;
-      armament.update(dt);
+      const reloadsCompleted = armament.update(dt);
+      for (const id of reloadsCompleted) {
+        const weapon = armament.getSnapshot().find(profile => profile.id === id);
+        onEvent({ type: 'weapon-reload', phase: 'complete', status: 'complete', weaponId: id, name: weapon.name });
+        audio.cue();
+        emitSnapshot();
+      }
       abilityCooldown = Math.max(0, abilityCooldown - dt);
       abilityRemaining = Math.max(0, abilityRemaining - dt);
       heat = Math.max(0, heat - dt * 0.26);
@@ -881,6 +887,14 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     emitSnapshot();
     return true;
   }
+  function reloadWeapon() {
+    if (mode !== 'playing' || !armament.reload()) return false;
+    const weapon = armament.getSnapshot().find(profile => profile.selected);
+    onEvent({ type: 'weapon-reload', phase: 'start', status: 'start', weaponId: weapon.id, name: weapon.name, duration: weapon.reloadDuration });
+    audio.cue();
+    emitSnapshot();
+    return true;
+  }
   function useAbility() {
     if (mode !== 'playing' || abilityCooldown > 0) return false;
     abilityCooldown = stats.ability.cooldown;
@@ -919,7 +933,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     return result;
   }
 
-  const consumedKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'KeyC', 'KeyF', 'Escape']);
+  const consumedKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'KeyC', 'KeyF', 'KeyR', 'Escape']);
   addListener(window, 'keydown', event => {
     if (/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName)) return;
     if (consumedKeys.has(event.code) && mode !== 'menu') event.preventDefault();
@@ -932,6 +946,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       return;
     }
     if (event.code === 'KeyF' && !event.repeat) useAbility();
+    if (event.code === 'KeyR') { if (!event.repeat) reloadWeapon(); return; }
     keys.add(event.code);
   });
   addListener(window, 'keyup', event => keys.delete(event.code));
@@ -958,7 +973,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   });
 
   const api = {
-    start, pause, resume, restart: () => start({ shipId: sortieShipId }), setCamera, selectWeapon, cycleWeapon, useAbility, submitQte,
+    start, pause, resume, restart: () => start({ shipId: sortieShipId }), setCamera, selectWeapon, cycleWeapon, reloadWeapon, useAbility, submitQte,
     getSnapshot,
     setMuted(value) { const result = audio.setMuted(value); emitSnapshot(); return result; },
     selectShip(id) { if (mode === 'menu') { replaceShip(id); emitSnapshot(); } },
@@ -999,6 +1014,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       escortAnchor: escortAnchor.toArray(), relayBonus,
       playerPosition: player.position.toArray(), playerQuaternion: player.quaternion.toArray(),
       cameraPosition: camera.position.toArray(), cameraQuaternion: camera.quaternion.toArray(),
+      orbitalStationVisible: Boolean(world.space?.visible),
       projectileDetails: projectiles.map(projectile => ({ type: projectile.type || 'laser', owner: projectile.owner, damage: projectile.damage, locked: Boolean(projectile.target), position: projectile.mesh.position.toArray(), velocity: projectile.velocity.toArray() })),
       playerModel: shipMesh.userData.modelStatus, playerModelUrl: shipMesh.userData.modelUrl,
       camera: cameraMode, renderCalls: renderer.info.render.calls,

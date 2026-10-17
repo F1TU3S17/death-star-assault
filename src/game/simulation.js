@@ -28,11 +28,15 @@ export function createArmament(profiles) {
   let selectedIndex = 0;
   let ammunition;
   let cooldowns;
+  let reserves;
+  let reloadClocks;
   const current = () => loadout[selectedIndex];
   function reset() {
     selectedIndex = 0;
     ammunition = Object.fromEntries(loadout.map(profile => [profile.id, profile.ammo == null ? null : Math.max(0, Math.floor(profile.ammo))]));
     cooldowns = Object.fromEntries(loadout.map(profile => [profile.id, 0]));
+    reserves = Object.fromEntries(loadout.map(profile => [profile.id, profile.ammo == null ? null : Math.max(0, Math.floor(profile.reserve || 0))]));
+    reloadClocks = Object.fromEntries(loadout.map(profile => [profile.id, 0]));
   }
   function select(id) {
     const index = loadout.findIndex(profile => profile.id === id);
@@ -45,19 +49,38 @@ export function createArmament(profiles) {
     return current().id;
   }
   function update(dt) {
-    if (!Number.isFinite(dt) || dt <= 0) return;
+    if (!Number.isFinite(dt) || dt <= 0) return [];
+    const completed = [];
     for (const id of Object.keys(cooldowns)) cooldowns[id] = Math.max(0, cooldowns[id] - dt);
+    for (const profile of loadout) {
+      if (reloadClocks[profile.id] <= 0) continue;
+      reloadClocks[profile.id] = Math.max(0, reloadClocks[profile.id] - dt);
+      if (reloadClocks[profile.id] < 1e-8) reloadClocks[profile.id] = 0;
+      if (reloadClocks[profile.id] === 0) {
+        const loaded = Math.min(Math.max(0, Math.floor(profile.ammo) - ammunition[profile.id]), reserves[profile.id]);
+        ammunition[profile.id] += loaded;
+        reserves[profile.id] -= loaded;
+        completed.push(profile.id);
+      }
+    }
+    return completed;
+  }
+  function reload() {
+    const profile = current();
+    if (profile.ammo == null || ammunition[profile.id] >= profile.ammo || reserves[profile.id] <= 0 || reloadClocks[profile.id] > 0) return false;
+    reloadClocks[profile.id] = Math.max(0.1, profile.reloadDuration || 4.5);
+    return true;
   }
   function consumeShot() {
     const profile = current();
-    if (cooldowns[profile.id] > 0 || ammunition[profile.id] === 0) return false;
+    if (cooldowns[profile.id] > 0 || reloadClocks[profile.id] > 0 || ammunition[profile.id] === 0) return false;
     cooldowns[profile.id] = profile.cooldown;
     if (ammunition[profile.id] !== null) ammunition[profile.id] -= 1;
     return true;
   }
-  const getSnapshot = () => loadout.map((profile, index) => ({ ...profile, ammo: ammunition[profile.id], cooldown: cooldowns[profile.id], selected: index === selectedIndex }));
+  const getSnapshot = () => loadout.map((profile, index) => ({ ...profile, ammo: ammunition[profile.id], reserve: reserves[profile.id], cooldown: cooldowns[profile.id], reloading: reloadClocks[profile.id] > 0, reloadRemaining: reloadClocks[profile.id], reloadDuration: profile.ammo == null ? 0 : profile.reloadDuration || 4.5, selected: index === selectedIndex }));
   reset();
-  return { reset, select, cycle, update, consumeShot, current: () => ({ ...current() }), getSnapshot };
+  return { reset, select, cycle, update, reload, consumeShot, current: () => ({ ...current() }), getSnapshot };
 }
 
 export function insideLockCone(origin, forward, target, minDot = 0.94, maxDistance = 1700) {

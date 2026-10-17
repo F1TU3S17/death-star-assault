@@ -9,7 +9,7 @@ export const SHIPS = {
     laserDamage: 19, laserCooldown: 0.18, laserHeat: 0.09, shieldRegen: 5,
     weapons: [
       { id: 'laser', name: 'Лазерные пушки', type: 'laser', damage: 19, speed: 670, cooldown: 0.18, ammo: null, heat: 0.09, lockDot: 0.96, range: 1400 },
-      { id: 'proton-torpedo', name: 'Протонные торпеды', type: 'torpedo', damage: 120, speed: 285, cooldown: 1.25, ammo: 6, heat: 0, lockDot: 0.94, range: 1700, turnRate: 1.65, splashRadius: 48, splashDamage: 55 },
+      { id: 'proton-torpedo', name: 'Протонные торпеды', type: 'torpedo', damage: 120, speed: 285, cooldown: 1.25, ammo: 6, reserve: 12, reloadDuration: 4.5, heat: 0, lockDot: 0.94, range: 1700, turnRate: 1.65, splashRadius: 48, splashDamage: 55 },
     ],
     model: 'xwing',
     description: 'Четыре лазерные пушки, протонные торпеды и дефлекторные щиты. Баланс скорости и защиты.',
@@ -26,7 +26,7 @@ export const SHIPS = {
     weapons: [
       { id: 'laser', name: 'Лазерные пушки', type: 'laser', damage: 24, speed: 670, cooldown: 0.24, ammo: null, heat: 0.08, lockDot: 0.96, range: 1400 },
       { id: 'ion-cannon', name: 'Ионные пушки', type: 'ion', damage: 4, speed: 590, cooldown: 0.38, ammo: null, heat: 0.05, stun: 3.5, lockDot: 0.96, range: 1200 },
-      { id: 'proton-torpedo', name: 'Протонные торпеды', type: 'torpedo', damage: 120, speed: 285, cooldown: 1.25, ammo: 8, heat: 0, lockDot: 0.94, range: 1700, turnRate: 1.65, splashRadius: 48, splashDamage: 55 },
+      { id: 'proton-torpedo', name: 'Протонные торпеды', type: 'torpedo', damage: 120, speed: 285, cooldown: 1.25, ammo: 8, reserve: 16, reloadDuration: 4.5, heat: 0, lockDot: 0.94, range: 1700, turnRate: 1.65, splashRadius: 48, splashDamage: 55 },
     ],
     model: 'ywing',
     description: 'Усиленная защита и мощный залп. Менее манёвренный; перед финалом управление передаётся Люку.',

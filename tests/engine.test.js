@@ -129,14 +129,48 @@ test('Y-wing ion equipment temporarily stuns an enemy in front within range', as
   } finally { fixture.close(); }
 });
 
+test('R reloads torpedoes from finite reserves, continues after weapon switching and freezes while paused', async () => {
+  const fixture = await engineHarness();
+  try {
+    const { game, debug } = fixture;
+    game.start(); game.selectWeapon('proton-torpedo');
+    const initial = game.getSnapshot().weapon;
+    assert.equal(game.reloadWeapon(), false, 'A full launcher must not consume reserves');
+    fixture.key('Space'); debug.step(0.025); fixture.key('Space', false);
+    assert.equal(game.getSnapshot().weapon.ammo, initial.ammo - 1);
+    fixture.key('KeyR'); fixture.key('KeyR', false);
+    assert.equal(game.getSnapshot().weapon.reloading, true);
+    assert.equal(game.reloadWeapon(), false, 'Repeated reload cannot restart or duplicate the transaction');
+    game.selectWeapon('laser');
+    debug.step(1);
+    const reloading = game.getSnapshot().weapons.find(weapon => weapon.id === 'proton-torpedo');
+    assert.ok(reloading.reloading && reloading.reloadRemaining < initial.reloadDuration);
+    game.pause(); debug.step(10);
+    assert.equal(game.reloadWeapon(), false);
+    assert.deepEqual(game.getSnapshot().weapons.find(weapon => weapon.id === 'proton-torpedo'), reloading);
+    game.resume(); debug.step(3.6);
+    const loaded = game.getSnapshot().weapons.find(weapon => weapon.id === 'proton-torpedo');
+    assert.equal(game.getSnapshot().weapon.id, 'laser', 'A background reload must not force a weapon change');
+    assert.equal(loaded.reloading, false);
+    assert.equal(loaded.ammo, initial.ammo);
+    assert.equal(loaded.reserve, initial.reserve - 1);
+    assert.equal(loaded.ammo + loaded.reserve, initial.ammo + initial.reserve - 1);
+    game.restart(); game.selectWeapon('proton-torpedo');
+    assert.equal(game.getSnapshot().weapon.ammo, initial.ammo);
+    assert.equal(game.getSnapshot().weapon.reserve, initial.reserve);
+    assert.equal(game.getSnapshot().weapon.reloading, false);
+  } finally { fixture.close(); }
+});
+
 test('physical relay hits complete only the optional objective and strengthen the escort fleet', async () => {
   const fixture = await engineHarness();
   try {
     const { game, debug } = fixture;
     game.start(); engineReachPhase(debug, 'surface');
     const batteries = debug.inspect().enemies.filter(enemy => enemy.kind === 'turret');
-    assert.ok(batteries.some(enemy => enemy.variant === 'heavy' && enemy.health > 70));
-    assert.ok(batteries.some(enemy => enemy.variant === 'light' && enemy.health === 70));
+    const light = batteries.find(enemy => enemy.variant === 'light');
+    const heavy = batteries.find(enemy => enemy.variant === 'heavy');
+    assert.ok(light?.health > 0 && heavy?.health > light.health);
     fixture.key('ControlLeft'); fixture.key('Space');
     for (let index = 0; index < 2; index++) {
       const relay = debug.inspect().enemies.find(enemy => enemy.kind === 'relay');

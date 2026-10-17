@@ -1983,6 +1983,8 @@ body[data-mode=cinematic] .hud {
 .weapon-slots button.selected { color: var(--amber); border-color: #edbb6680; background: #edbb6610; }
 .weapon-panel.locked { border-color: #edbb6690; }
 .weapon-panel.empty #weapon-ammo { color: var(--red); }
+.weapon-reload { width: 100%; margin-top: 8px; padding: 7px 5px; border: 1px solid #edbb6640; background: #edbb6608; color: var(--amber); font-size: 8px; letter-spacing: .6px; }
+.weapon-reload kbd { margin-right: 5px; padding: 2px 4px; font-size: 8px; }
 .squad-panel { position: absolute; top: 135px; left: 32px; width: 270px; padding: 12px; background: #080c12b8; border-left: 2px solid var(--blue); }
 .squad-panel .label { font-size: 9px; letter-spacing: 1px; }
 .ally-row { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; margin-top: 13px; font-size: 11px; }

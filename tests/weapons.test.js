@@ -26,6 +26,64 @@ test('canonical loadouts, finite torpedo magazines and independent cooldowns sur
   assert.equal(weapons.getSnapshot()[1].ammo, 6);
 });
 
+test('torpedo reload transfers only missing rounds and repeated R cannot restart its clock', () => {
+  const weapons = createArmament(SHIPS.xwing.weapons);
+  assert.equal(weapons.reload(), false, 'energy weapons do not reload');
+  weapons.select('proton-torpedo');
+  assert.equal(weapons.reload(), false, 'a full launcher does not waste reserve');
+  weapons.consumeShot();
+  assert.equal(weapons.reload(), true);
+  let torpedo = weapons.getSnapshot()[1];
+  assert.equal(torpedo.ammo, 5);
+  assert.equal(torpedo.reserve, 12);
+  assert.equal(torpedo.reloadDuration, 4.5);
+  assert.equal(torpedo.reloadRemaining, 4.5);
+  assert.equal(weapons.consumeShot(), false, 'launching during reload is blocked');
+  weapons.update(2);
+  assert.equal(weapons.reload(), false);
+  assert.equal(weapons.getSnapshot()[1].reloadRemaining, 2.5);
+  assert.deepEqual(weapons.update(2.5), ['proton-torpedo']);
+  torpedo = weapons.getSnapshot()[1];
+  assert.equal(torpedo.ammo, 6);
+  assert.equal(torpedo.reserve, 11);
+  assert.equal(torpedo.reloading, false);
+  assert.deepEqual(weapons.update(10), [], 'completion is emitted only once');
+  weapons.consumeShot();
+  assert.equal(weapons.reload(), true);
+  for (let frame = 0; frame < 180; frame++) weapons.update(0.025);
+  assert.equal(weapons.getSnapshot()[1].reloading, false, '4.5 seconds of render steps completes despite floating-point roundoff');
+});
+
+test('background reload survives weapon changes while finite reserves run out and reset restores them', () => {
+  const weapons = createArmament(SHIPS.xwing.weapons);
+  const emptyMagazine = () => {
+    weapons.select('proton-torpedo');
+    for (let i = 0; i < 6; i++) { weapons.update(1.3); assert.equal(weapons.consumeShot(), true); }
+  };
+  for (const reserveAfterReload of [6, 0]) {
+    emptyMagazine();
+    assert.equal(weapons.reload(), true);
+    weapons.update(1);
+    weapons.select('laser');
+    assert.equal(weapons.consumeShot(), true, 'a torpedo reload must not block lasers');
+    weapons.update(NaN);
+    weapons.update(-1);
+    assert.equal(weapons.getSnapshot()[1].reloadRemaining, 3.5);
+    weapons.update(3.5);
+    assert.equal(weapons.current().id, 'laser');
+    assert.equal(weapons.getSnapshot()[1].ammo, 6);
+    assert.equal(weapons.getSnapshot()[1].reserve, reserveAfterReload);
+  }
+  emptyMagazine();
+  assert.equal(weapons.reload(), false, 'the reserve cannot create unlimited torpedoes');
+  assert.equal(weapons.getSnapshot()[1].ammo, 0);
+  weapons.reset();
+  assert.equal(weapons.getSnapshot()[1].ammo, 6);
+  assert.equal(weapons.getSnapshot()[1].reserve, 12);
+  assert.equal(weapons.getSnapshot()[1].reloading, false);
+  assert.equal(SHIPS.ywing.weapons.find(weapon => weapon.id === 'proton-torpedo').reserve, 16);
+});
+
 test('targeting rejects rear/out-of-range targets and steering respects turn rate', () => {
   const origin = { x: 0, y: 0, z: 0 }, forward = { x: 0, y: 0, z: -1 };
   assert.equal(insideLockCone(origin, forward, { x: 10, y: 0, z: -500 }), true);
