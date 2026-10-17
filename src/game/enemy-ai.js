@@ -1,4 +1,5 @@
 import { steerDirection } from './simulation.js';
+import { solveFireSolution, getEnemyWeaponProfile } from './enemy-fire-control.js';
 
 const add = (a, b) => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z });
 const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
@@ -8,12 +9,15 @@ const length = a => Math.hypot(a.x, a.y, a.z);
 const unit = a => { const size = length(a); return size > 1e-6 ? mul(a, 1 / size) : { x: 0, y: 0, z: -1 }; };
 const ZERO = { x: 0, y: 0, z: 0 };
 const PROFILES = {
-  line: { speed: 92, turnRate: 1.12, approachRange: 520, telegraph: 0.85, attack: 2.6, break: 2.1, reposition: 2, shotInterval: 1.25, breakRange: 155, fireCone: 0.13, reaction: 0.24, threatRange: 260, threatWindow: 0.55, evadeGain: 0.65 },
-  ace: { speed: 115, turnRate: 1.65, approachRange: 480, telegraph: 0.6, attack: 2.1, break: 1.7, reposition: 1.5, shotInterval: 1, breakRange: 145, fireCone: 0.105, reaction: 0.12, threatRange: 340, threatWindow: 0.75, evadeGain: 1.15 },
-  vader: { speed: 105, turnRate: 1.25, approachRange: 580, telegraph: 0.75, attack: 1.9, break: 1.5, reposition: 1.5, shotInterval: 1.15, breakRange: 125, fireCone: 0.14, reaction: 0.16, threatRange: 320, threatWindow: 0.65, evadeGain: 0.85 },
+  line: { speed: 92, turnRate: 1.12, approachRange: 520, attack: 2.6, break: 2.1, reposition: 2, breakRange: 155, fireCone: 0.13, reaction: 0.24, threatRange: 260, threatWindow: 0.55, evadeGain: 0.65 },
+  ace: { speed: 115, turnRate: 1.65, approachRange: 480, attack: 2.1, break: 1.7, reposition: 1.5, breakRange: 145, fireCone: 0.105, reaction: 0.12, threatRange: 340, threatWindow: 0.75, evadeGain: 1.15 },
+  vader: { speed: 105, turnRate: 1.25, approachRange: 580, attack: 1.9, break: 1.5, reposition: 1.5, breakRange: 125, fireCone: 0.14, reaction: 0.16, threatRange: 320, threatWindow: 0.65, evadeGain: 0.85 },
 };
 
-export function getEnemyProfile(variant = 'line') { return { ...(PROFILES[variant] || PROFILES.line) }; }
+export function getEnemyProfile(variant = 'line') {
+  const weapon = getEnemyWeaponProfile(variant === 'vader' ? 'vader' : 'tie', variant);
+  return { ...(PROFILES[variant] || PROFILES.line), shotInterval: weapon.interval, telegraph: weapon.telegraph, fireRange: weapon.range };
+}
 
 /** Solve observed constant-velocity interception, capped to avoid perfect long-range prediction. */
 export function interceptPoint(origin, targetPosition, targetVelocity = ZERO, projectileSpeed = 245, maxLead = 1.4) {
@@ -59,6 +63,7 @@ export function createEnemyBrain(variant = 'line', seed = 0) {
 export function updateEnemyBrain(brain, context, delta) {
   const dt = Math.min(0.1, Math.max(0, Number(delta) || 0));
   const profile = getEnemyProfile(brain.variant);
+  if (context.weaponProfile) { profile.shotInterval = context.weaponProfile.interval; profile.fireRange = context.weaponProfile.range; }
   const tactics = context.tactics;
   if (tactics?.pilotRole === 'novice') { profile.turnRate *= .82; profile.reaction *= 1.5; }
   if (tactics?.pilotRole === 'veteran' || tactics?.pilotRole === 'leader') profile.turnRate *= 1.12;
@@ -85,7 +90,8 @@ export function updateEnemyBrain(brain, context, delta) {
   brain.evadeRemaining = Math.max(0, brain.evadeRemaining - dt);
   // A pass at 650 m needs up to three seconds of lead with these visible, slow bolts.
   // Use observed motion for every target, including the ships the player must defend.
-  const prediction = interceptPoint(position, target.position, targetVelocity, 245, 3);
+  const firingSolution = solveFireSolution({ origin: position, targetPosition: target.position, targetVelocity, profile: context.weaponProfile || getEnemyWeaponProfile(brain.variant === 'vader' ? 'vader' : 'tie', brain.variant) });
+  const prediction = firingSolution.reachable ? firingSolution.interceptPoint : interceptPoint(position, target.position, targetVelocity, 245, 3);
   const aimDirection = unit(sub(prediction, position));
   const alignment = dot(forward, unit(offset));
 
@@ -136,7 +142,7 @@ export function updateEnemyBrain(brain, context, delta) {
   }
   desired = unit(add(desired, avoidance));
   const direction = steerDirection(forward, desired, profile.turnRate * dt);
-  const fire = brain.state === 'attack' && brain.shotCooldown <= 0 && distance > 160 && distance < 650 && dot(direction, aimDirection) >= Math.cos(profile.fireCone) && brain.evadeRemaining === 0;
+  const fire = firingSolution.reachable && brain.state === 'attack' && brain.shotCooldown <= 0 && distance > 160 && distance < profile.fireRange && dot(direction, aimDirection) >= Math.cos(profile.fireCone) && brain.evadeRemaining === 0;
   if (fire) brain.shotCooldown = profile.shotInterval;
   let speed = context.cruiseSpeed || profile.speed;
   speed *= tactics?.speedMultiplier || 1;

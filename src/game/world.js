@@ -709,8 +709,8 @@ export function createWorld(scene) {
   function setPhase(phase) {
     const isCinema = phase === 'cinematic' || phase === 'victory';
     space.visible = ['menu', 'combat'].includes(phase);
-    surface.visible = ['surface', 'escort', 'defend', 'trench'].includes(phase);
-    distantBattle.visible = ['combat', 'surface', 'escort', 'defend'].includes(phase);
+    surface.visible = ['surface', 'escort', 'assault', 'defend', 'trench'].includes(phase);
+    distantBattle.visible = ['combat', 'surface', 'escort', 'assault', 'defend'].includes(phase);
     trench.visible = phase === 'trench';
     cinematic.visible = isCinema || phase === 'qte';
     qtePursuit.visible = phase === 'qte';

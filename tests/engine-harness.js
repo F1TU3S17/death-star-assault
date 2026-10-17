@@ -61,7 +61,13 @@ export async function engineHarness() {
   const record = name => (...args) => { audioCalls.push({ name, args }); };
   const dependencies = {
     Renderer, createShip, createWorld,
-    createTurret() { const mesh = new Three.Group(); mesh.userData.head = new Three.Group(); return mesh; },
+    createTurret(kind) {
+      const mesh = new Three.Group();
+      const head = new Three.Group();
+      head.position.y = kind === 'heavy' ? 17 : 8;
+      mesh.add(head); mesh.userData.head = head;
+      return mesh;
+    },
     createCockpit: () => new Three.Group(),
     // The real mixer is replaced: every engine hook is recorded so tests can assert playback order.
     createAudio() {

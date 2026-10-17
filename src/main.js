@@ -355,7 +355,7 @@ function render(state) {
   }
   const allies = state.allies || [];
   $('squad-panel').hidden = !allies.length || !['playing', 'paused'].includes(mode);
-  $('squad-heading').textContent = state.phase === 'defend' ? 'ПРИКРЫТЬ КЛИНА / КРАСНЫЙ ДВА' : 'СОПРОВОЖДЕНИЕ / ЗОЛОТАЯ ГРУППА';
+  $('squad-heading').textContent = state.phase === 'assault' ? 'ПРИКРЫТЬ КРАСНОГО ЛИДЕРА' : state.phase === 'defend' ? 'ПРИКРЫТЬ КЛИНА / КРАСНЫЙ ДВА' : 'СОПРОВОЖДЕНИЕ / ЗОЛОТАЯ ГРУППА';
   const allySignature = allies.map(ally => `${ally.id}:${Math.round(ally.health)}:${Math.round(ally.distance)}`).join('|');
   if ($('allies-list').dataset.signature !== allySignature) {
     $('allies-list').dataset.signature = allySignature;

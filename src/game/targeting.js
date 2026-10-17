@@ -57,7 +57,7 @@ export function getLeadSolution({ origin, targetPosition, targetVelocity = { x: 
 
 /** Analytic station cover checks avoid raycasting the station's thousands of detail instances. */
 export function stationLineOfSight(origin, target, phase) {
-  if (!['surface', 'escort', 'defend', 'trench'].includes(phase)) return true;
+  if (!['surface', 'escort', 'assault', 'defend', 'trench'].includes(phase)) return true;
   if (origin.y < -148 || target.y < -148) return false;
   if (phase !== 'trench') return true;
   const low = Math.min(origin.y, target.y);

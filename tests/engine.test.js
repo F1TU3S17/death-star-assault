@@ -227,6 +227,24 @@ test('unopposed enemy projectiles can destroy Wedge and fail the defense objecti
   } finally { fixture.close(); }
 });
 
+test('unopposed physical enemy fire can kill Red Leader before the assault rally', async () => {
+  const fixture = await engineHarness();
+  try {
+    const { game, debug } = fixture;
+    game.start(); engineReachPhase(debug, 'assault');
+    assert.ok(debug.inspect().allies.some(ally => ally.id === 'red-leader'));
+    // Observe from outside the firing approach and rally; all damage comes from ordinary AI bolts.
+    fixture.player().position.set(900, 250, 700);
+    fixture.key('ControlLeft');
+    for (let frame = 0; frame < 1200 && game.getSnapshot().mode === 'playing'; frame++) debug.step(0.1);
+    assert.equal(game.getSnapshot().mode, 'defeat');
+    assert.match(game.getSnapshot().reason, /Красный Лидер/);
+    assert.equal(game.getSnapshot().kills, 0);
+    assert.ok(fixture.events.some(event => event.type === 'ally-lost' && event.allyId === 'red-leader'));
+    assert.equal(fixture.events.some(event => event.type === 'red-leader-launch'), false);
+  } finally { fixture.close(); }
+});
+
 test('losing every escort ship to enemy fire fails the campaign rather than granting an escort checkpoint', async () => {
   const fixture = await engineHarness();
   try {
@@ -266,7 +284,7 @@ test('Vader retreats after physical hits and is never counted as a canonical kil
   } finally { fixture.close(); }
 });
 
-test('physical combat, surface, escort, defense and trench can be completed without progression cheats', async () => {
+test('physical combat, surface, escort, assault, defense and trench can be completed without progression cheats', async () => {
   const fixture = await engineHarness();
   try {
     const { game, debug } = fixture;
@@ -280,15 +298,27 @@ test('physical combat, surface, escort, defense and trench can be completed with
     let target;
     const phases = new Set();
     let escortedAllies = 0;
+    let assaultKills = 0;
+    let assaultRallyApproach = false;
     for (let frame = 0; frame < 16000 && game.getSnapshot().mode === 'playing'; frame++) {
       const snapshot = game.getSnapshot();
       phases.add(snapshot.phase);
       const desired = new Set();
       if (snapshot.phase !== 'trench') {
         const enemies = debug.inspect().enemies;
-        if (!target || !enemies.some(enemy => enemy.position.join() === target.position.join())) target = enemies[0];
+        target = enemies.find(enemy => enemy.id === target?.id && !enemy.disabled && !enemy.retreat)
+          || enemies.find(enemy => !enemy.bonusOnly && !enemy.disabled && !enemy.retreat);
         let aimPosition = target?.position;
         let braking = true;
+        if (snapshot.phase === 'assault') {
+          assaultKills = Math.max(assaultKills, snapshot.assault.kills);
+          if (snapshot.assault.kills >= snapshot.assault.targetKills) {
+            const point = snapshot.mission.combatRoute.point;
+            aimPosition = [point.x, point.y, point.z];
+            braking = fixture.player().position.distanceTo(new THREE.Vector3(...aimPosition)) < 250;
+            assaultRallyApproach = true;
+          }
+        }
         if (snapshot.phase === 'escort' && snapshot.allies.length) {
           escortedAllies = snapshot.allies.length;
           const fleet = snapshot.allies.reduce((sum, ally) => sum.add(new THREE.Vector3(ally.position.x, ally.position.y, ally.position.z)), new THREE.Vector3()).divideScalar(snapshot.allies.length);
@@ -317,10 +347,14 @@ test('physical combat, surface, escort, defense and trench can be completed with
     const final = game.getSnapshot();
     assert.equal(final.mode, 'qte', `Physical run stalled or failed: ${JSON.stringify(final)}; ${JSON.stringify(debug.inspect())}`);
     assert.equal(final.mission.type, 'qte');
-    assert.deepEqual([...phases], ['combat', 'surface', 'escort', 'defend', 'trench']);
+    assert.deepEqual([...phases], ['combat', 'surface', 'escort', 'assault', 'defend', 'trench']);
     assert.ok(escortedAllies > 0);
-    assert.ok(final.kills >= 13);
+    assert.equal(assaultKills, 3);
+    assert.ok(assaultRallyApproach, 'Three real kills must be followed by a flight to the rally point');
+    assert.ok(final.kills >= 16);
     assert.ok(final.health > 0);
+    const redLeaderStory = fixture.events.filter(event => ['red-leader-launch', 'red-leader-miss', 'red-leader-lost'].includes(event.type));
+    assert.deepEqual(redLeaderStory.map(event => event.type), ['red-leader-launch', 'red-leader-miss', 'red-leader-lost'], 'A real assault completion must play the canonical failed attack in order');
   } finally { fixture.close(); }
 });
 

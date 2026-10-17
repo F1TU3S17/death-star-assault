@@ -48,3 +48,27 @@ The three independent pure APIs are atomic artifact transactions. Runtime integr
 
 
 Accepted artifact checkpoints: TB-A `e25dd07` (7 tests), TB-B `d1d6d0b` (6 tests), TB-C `7cdccd6` (7 tests). Combined integration gate: **133/133 passed**, zero skips/cancellations, including five new real-engine integration scenarios, responsive touch controls and full desktop Chromium campaign checks. Production build succeeded (`index-DH5cTskc.js`). Native HD settings are unchanged. The desktop software-rendered browser test took 172.8 seconds; these timings are not a hardware performance measurement. Temporary screenshots remain under `%TEMP%/death-star-assault-qa/`. Runtime integration is accepted in the enclosing commit; publication remains GitHub-only.
+
+
+## Accurate fire and Red Leader integration
+
+| Atomic artifact | Exclusive owner | Gate |
+| --- | --- | --- |
+| enemy-fire-control.js + test | GPT-6.1 | 7 tests, including 48 swept constant-velocity bolt/target collisions |
+| enemy-units.js + test | GPT-6-luna | 5 tests: per-kind fallback, isolated stats, seeded valid target selection |
+| missions/campaign + campaign tests/fixture | GPT-6-luna | 7 campaign tests: capped kills, rally in either order, no timer skip |
+| Yavin canon review | GPT-6-luna | Official StarWars.com references, concrete stage and adaptation boundaries |
+| Physical fire tests + engine regression | GPT-6.1 | 19 focused tests: real shield damage, evasion, pause, real campaign and narrative outcome |
+| Browser stage checks | GPT-6-luna | New assault scene/ally/surface assertions and screenshot inside existing workflow |
+| Shared integration | Coordinator | Sequential engine/world/targeting/HUD adapters and final combined gate |
+
+Independent modules are accepted only with their focused tests. Runtime imports, mission progression and visual/narrative feedback form one dependent integration transaction. Existing parallel audio work remains unstaged and is preserved. Sites is unchanged.
+
+
+Reusable-controller artifact checkpoint: `a97e702` (12 focused checks). The first combined run passed 151 cases with one desktop browser cancellation at 180 seconds; no assertion failed. Equipment assertions were then split unchanged into their own browser case, retaining native HD, screenshots, console/resource checks and the existing timeout. Two additional posthumous Red Leader warnings were corrected and checked by a dedicated narrative test. Final combined gate follows below.
+
+
+The second combined attempt passed 153 checks with one desktop case cancellation; all assertions remained intact. X-wing asset/cockpit/native-concept checks were additionally separated from mission progression. The final targeted browser rerun verified that complete equipment/model scenario in 56.5 seconds, under the unchanged 180-second per-case limit. The unchanged responsive scenario had already passed; no additional production changes followed the final build.
+
+
+Final acceptance: targeted final equipment/model/native-HD case passed in 56.5 seconds and mission/control/QTE/retry/victory case passed in 116.7 seconds; 2/2 passed, zero skips/cancellations, using the unchanged 180-second limits. Together with the 153 passing cases from the combined run, all 154 unique shared-workspace checks are covered. This count includes the separately preserved audio test changes; audio source/tests/docs are excluded from this integration commit. Final production build succeeded (`index-D1TEsqdo.js`, 49 modules). Current Red Leader screenshot and console/resource checks passed. No Sites publication.

@@ -8,7 +8,7 @@ export function createCampaign(episodeId = 'episode4') {
   const episode = EPISODES[episodeId];
   if (!episode?.missions?.length) throw new Error(`Unknown or empty episode: ${episodeId}`);
   let missionIndex, progress, elapsed, qteIndex, qteRemaining, qteTotalRemaining;
-  let failed, reason, complete, radio, sideProgress;
+  let failed, reason, complete, radio, sideProgress, assaultKills, assaultRallyReached;
 
   const current = () => episode.missions[missionIndex];
   const enter = (index) => {
@@ -20,6 +20,8 @@ export function createCampaign(episodeId = 'episode4') {
     qteTotalRemaining = current().duration || 0;
     radio = { ...current().radio };
     sideProgress = Object.fromEntries((current().sideObjectives || []).map(objective => [objective.id, 0]));
+    assaultKills = 0;
+    assaultRallyReached = false;
   };
   const active = () => !failed && !complete;
   const advance = () => {
@@ -57,6 +59,11 @@ export function createCampaign(episodeId = 'episode4') {
       mission: { ...JSON.parse(JSON.stringify(mission)), index: missionIndex, progress },
       progress, target: mission.target, radio: radio ? { ...radio } : null,
       qte, complete, failed, reason, elapsed,
+      assault: mission.type === 'assault' ? {
+        kills: assaultKills,
+        targetKills: mission.combatRoute.kills,
+        rallyReached: assaultRallyReached,
+      } : null,
       sideObjectives: (mission.sideObjectives || []).map(objective => ({
         ...objective, progress: sideProgress[objective.id] || 0,
         complete: (sideProgress[objective.id] || 0) >= objective.target,
@@ -66,7 +73,11 @@ export function createCampaign(episodeId = 'episode4') {
 
   function recordKill(kind) {
     if (!active()) return getSnapshot();
-    if ((['combat', 'defend'].includes(current().type) && kind === 'tie') || (current().type === 'surface' && kind === 'turret')) {
+    if (current().type === 'assault' && kind === 'tie') {
+      assaultKills = Math.min(current().combatRoute.kills, assaultKills + 1);
+      progress = assaultKills + Number(assaultRallyReached);
+      if (assaultKills >= current().combatRoute.kills && assaultRallyReached) advance();
+    } else if ((['combat', 'defend'].includes(current().type) && kind === 'tie') || (current().type === 'surface' && kind === 'turret')) {
       progress += 1;
       if (progress >= current().target) advance();
     }
@@ -74,7 +85,11 @@ export function createCampaign(episodeId = 'episode4') {
   }
 
   function recordCheckpoint() {
-    if (active() && current().type === 'trench') {
+    if (active() && current().type === 'assault') {
+      assaultRallyReached = true;
+      progress = assaultKills + 1;
+      if (assaultKills >= current().combatRoute.kills) advance();
+    } else if (active() && current().type === 'trench') {
       progress += 1;
       if (progress >= current().target) advance();
     }

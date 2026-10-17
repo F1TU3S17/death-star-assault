@@ -151,7 +151,7 @@ test('phase change archives optional outcomes, preserves points and reset clears
 });
 
 test('optional director never changes canonical main mission order or completes campaign goals', () => {
-  assert.deepEqual(MISSIONS.map(mission => mission.type), ['combat', 'surface', 'escort', 'defend', 'trench', 'qte', 'cinematic']);
+  assert.deepEqual(MISSIONS.map(mission => mission.type), ['combat', 'surface', 'escort', 'assault', 'defend', 'trench', 'qte', 'cinematic']);
   const campaign = createCampaign();
   const director = createMissionDirector();
   director.enterPhase('surface');
@@ -167,4 +167,13 @@ test('optional director never changes canonical main mission order or completes 
   mission.events[0].text = 'Changed';
   assert.equal(campaign.getSnapshot().mission.fieldObjectives[0].position.x, -150);
   assert.notEqual(campaign.getSnapshot().mission.events[0].text, 'Changed');
+});
+
+
+test('mission radio after Red Leader’s missed attack never assigns lines to the fallen leader', () => {
+  const leaderIndex = MISSIONS.findIndex(mission => mission.id === 'red-leader-run');
+  assert.ok(leaderIndex >= 0);
+  for (const mission of MISSIONS.slice(leaderIndex + 1)) {
+    for (const line of [mission.radio, ...(mission.events || [])]) assert.notEqual(line?.speaker, 'Красный Лидер');
+  }
 });

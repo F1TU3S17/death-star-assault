@@ -21,7 +21,15 @@ test('objectives require matching events; time alone cannot clear combat or tren
   campaign.recordKill('tie');
   campaign.update(1000);
   assert.equal(campaign.getSnapshot().progress, 0);
+  assert.equal(campaign.getSnapshot().phase, 'escort');
   completeCampaignMission(campaign);
+  assert.equal(campaign.getSnapshot().phase, 'assault');
+  assert.equal(campaign.getSnapshot().mission.id, 'red-leader-run');
+  campaign.update(1000);
+  for (let i = 0; i < 4; i += 1) campaign.recordKill('tie');
+  assert.equal(campaign.getSnapshot().phase, 'assault');
+  assert.equal(campaign.getSnapshot().progress, 3);
+  campaign.recordCheckpoint();
   assert.equal(campaign.getSnapshot().phase, 'defend');
   campaign.recordEscortCheckpoint();
   campaign.recordKill('turret');
@@ -32,6 +40,40 @@ test('objectives require matching events; time alone cannot clear combat or tren
   assert.equal(campaign.getSnapshot().phase, 'trench');
   campaign.recordCheckpoint();
   assert.equal(campaign.getSnapshot().phase, 'qte');
+});
+
+test('assault requires both rally and three kills in either order, with capped progress and reset flags', () => {
+  const campaign = createCampaign();
+  completeCampaignMission(campaign);
+  completeCampaignMission(campaign);
+  completeCampaignMission(campaign);
+  assert.equal(campaign.getSnapshot().phase, 'assault');
+
+  campaign.recordCheckpoint();
+  campaign.recordCheckpoint();
+  assert.equal(campaign.getSnapshot().progress, 1);
+  assert.deepEqual(campaign.getSnapshot().assault, { kills: 0, targetKills: 3, rallyReached: true });
+  campaign.recordKill('tie');
+  campaign.recordKill('tie');
+  campaign.recordKill('tie');
+  assert.equal(campaign.getSnapshot().phase, 'defend');
+  assert.equal(campaign.getSnapshot().assault, null);
+
+  campaign.reset();
+  completeCampaignMission(campaign);
+  completeCampaignMission(campaign);
+  completeCampaignMission(campaign);
+  assert.deepEqual(campaign.getSnapshot().assault, { kills: 0, targetKills: 3, rallyReached: false });
+  campaign.recordKill('tie');
+  campaign.recordKill('tie');
+  campaign.recordKill('tie');
+  campaign.recordKill('tie');
+  campaign.update(1000);
+  assert.equal(campaign.getSnapshot().phase, 'assault');
+  assert.equal(campaign.getSnapshot().progress, 3);
+  assert.deepEqual(campaign.getSnapshot().assault, { kills: 3, targetKills: 3, rallyReached: false });
+  campaign.recordCheckpoint();
+  assert.equal(campaign.getSnapshot().phase, 'defend');
 });
 
 test('optional energy relays track independently, clamp completion and cannot skip a mission', () => {

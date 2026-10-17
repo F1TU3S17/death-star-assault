@@ -7,11 +7,17 @@ export function completeCampaignMission(campaign) {
     combat: () => campaign.recordKill('tie'),
     surface: () => campaign.recordKill('turret'),
     escort: () => campaign.recordEscortCheckpoint(),
+    assault: () => {},
     defend: () => campaign.recordKill('tie'),
     trench: () => campaign.recordCheckpoint(),
   };
   assert.ok(events[state.phase], `No objective fixture for ${state.phase}`);
-  for (let i = state.progress; i < state.target; i++) events[state.phase]();
+  if (state.phase === 'assault') {
+    for (let i = state.assault.kills; i < state.assault.targetKills; i++) campaign.recordKill('tie');
+    campaign.recordCheckpoint();
+  } else {
+    for (let i = state.progress; i < state.target; i++) events[state.phase]();
+  }
 }
 
 export function reachQte(campaign) {
