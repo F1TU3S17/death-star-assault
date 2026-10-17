@@ -57,11 +57,28 @@ export async function engineHarness() {
       setPhase() {}, update() {}, updateCinema() {}, dispose() {},
     };
   }
+  const audioCalls = [];
+  const record = name => (...args) => { audioCalls.push({ name, args }); };
   const dependencies = {
     Renderer, createShip, createWorld,
     createTurret() { const mesh = new Three.Group(); mesh.userData.head = new Three.Group(); return mesh; },
     createCockpit: () => new Three.Group(),
-    createAudio() { return { muted: false, start() {}, cue() {}, hit() {}, laser() {}, explosion() {}, ability() {}, dispose() {}, setMuted(value) { this.muted = !!value; return this.muted; } }; },
+    // The real mixer is replaced: every engine hook is recorded so tests can assert playback order.
+    createAudio() {
+      return {
+        muted: false,
+        start: record('start'), cue: record('cue'), hit: record('hit'), laser: record('laser'),
+        explosion: record('explosion'), ability: record('ability'), radio: record('radio'), astromech: record('astromech'),
+        incoming: record('incoming'), vent: record('vent'), ion: record('ion'), tie: record('tie'), lock: record('lock'),
+        turbolaser: record('turbolaser'), enemyLaser: record('enemyLaser'),
+        torpedo: record('torpedo'), torpedoImpact: record('torpedoImpact'), stationExplosion: record('stationExplosion'),
+        superlaserCharge: record('superlaserCharge'), superlaserFire: record('superlaserFire'), klaxon: record('klaxon'),
+        whoosh: record('whoosh'), missionCue: record('missionCue'), setPaused: record('setPaused'), setFlight: record('setFlight'),
+        loadManifest: record('loadManifest'), dispose: record('dispose'),
+        getSampleStatus: () => ({ state: 'unavailable', events: [] }),
+        setMuted(value) { this.muted = !!value; return this.muted; },
+      };
+    },
   };
   Object.assign(globalThis, { window, document, requestAnimationFrame: callback => { pendingFrame = callback; return 1; }, cancelAnimationFrame() {}, __engineTestDependencies: dependencies });
   let source = await readFile(new URL('../src/game/engine.js', import.meta.url), 'utf8');
@@ -76,7 +93,7 @@ export async function engineHarness() {
   const frame = (delta = 0.025) => { now += delta * 1000; pendingFrame(now); };
   frame(0);
   return {
-    game, debug, events, window, document, canvas, frame,
+    game, debug, events, window, document, canvas, frame, audioCalls,
     player: () => scene.children.find(object => object.children.some(child => ['xwing', 'ywing'].includes(child.userData.kind))),
     key(code, held = true) { window.dispatch(held ? 'keydown' : 'keyup', { code }); },
     close() {

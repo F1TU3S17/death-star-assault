@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { createCampaign } from './campaign.js';
 import { createMissionDirector } from './mission-events.js';
 import { createEscortTactics } from './escort-tactics.js';
+import { createEnemySquadron } from './enemy-squadron.js';
+import { createShipSystems } from './ship-systems.js';
+import { createWingOrders, createEscortBonus } from './wing-orders.js';
 import { createMissionProp } from './mission-props.js';
 import { createEnemyBrain, updateEnemyBrain, interceptPoint } from './enemy-ai.js';
 import { SHIPS } from './data.js';
@@ -92,13 +95,20 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     } else if (event.type === 'mission-complete') audio.missionCue?.('success');
     else if (event.type === 'side-complete') audio.missionCue?.('objective');
     else if (event.type === 'defeat') audio.missionCue?.('fail');
-    else if (event.type === 'victory') audio.missionCue?.('success');
+    else if (event.type === 'victory') audio.missionCue?.('victory');
     else if (event.type === 'enemy-attack' && event.targetId === 'player') audio.incoming?.();
     publishEvent(event);
   };
   const campaign = createCampaign('episode4');
   const missionDirector = createMissionDirector();
   const escortTactics = createEscortTactics();
+  const squadron = createEnemySquadron();
+  const shipSystems = createShipSystems();
+  const wingOrders = createWingOrders();
+  const escortBonus = createEscortBonus();
+  let tacticalScore = 0;
+  let repairTarget = 'hull';
+  let weaponFaultDelay = 0;
   let escortChoicePending = false;
   const missionProps = [];
   let entitySerial = 0;
@@ -162,6 +172,8 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   let lastRadio = '';
   let lastQteStage = -1;
   let explosionPlayed = false;
+  let torpedoImpactPlayed = false;
+  let superlaserCharging = false;
   let mouseYaw = 0;
   let mousePitch = 0;
   let mouseFiring = false;
@@ -236,6 +248,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   function clearCombat() {
     targetLock.reset();
     escortTactics.reset();
+    squadron.reset();
     escortChoicePending = false;
     for (const prop of missionProps) { scene.remove(prop.mesh); prop.dispose(); }
     missionProps.length = 0;
@@ -449,6 +462,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       spawnTie(new THREE.Vector3(0, -40, 400));
       spawnTie(new THREE.Vector3(25, -30, -800));
       spawnTie(new THREE.Vector3(0, -43, 1280), 'vader');
+      audio.klaxon?.();
     } else if (phase === 'qte') {
       const forced = campaign.getSnapshot().mission.forceShipId;
       if (forced && selectedShipId !== forced) replaceShip(forced);
@@ -457,6 +471,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       speed = 0;
       mode = 'qte';
       lastQteStage = -1;
+      superlaserCharging = false;
       clearInput();
       exitPointerLock();
     } else if (phase === 'cinematic') {
@@ -464,6 +479,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       cockpit.visible = false;
       player.visible = false;
       explosionPlayed = false;
+      torpedoImpactPlayed = false;
       clearInput();
       exitPointerLock();
     } else if (phase === 'victory') {
@@ -487,6 +503,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     return {
       x: temporary.x * 0.5 + 0.5, y: 0.5 - temporary.y * 0.5,
       distance: Math.round(enemy.mesh.position.distanceTo(player.position)), kind: enemy.kind,
+      pilotRole: enemy.pilotRole, squadRole: enemy.squadRole,
       variant: enemy.variant, aiState: enemy.aiState || 'tracking', telegraph: Boolean(enemy.telegraph),
     };
   }
@@ -511,7 +528,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   function updateTargetLock(dt) {
     const weapon = armament.current();
     const candidate = weapon.type === 'torpedo' ? findAimTarget(weapon) : null;
-    targetLock.update(candidate?.id, dt, { enabled: weapon.type === 'torpedo' });
+    targetLock.update(candidate?.id, dt * shipSystems.snapshot().effects.sensorLockRate, { enabled: weapon.type === 'torpedo' });
   }
 
   function getSnapshot() {
@@ -520,6 +537,8 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     const completed = [...content.history, ...content.sideObjectives];
     content.completedObjectives = completed.filter(objective => objective.complete).length;
     content.totalObjectives = completed.length;
+    content.bonusScore = (content.bonusScore || 0) + tacticalScore;
+    const coordination = squadron.snapshot();
     const active = mode !== 'menu';
     const availableWeapons = armament.getSnapshot();
     const selectedWeapon = availableWeapons.find(weapon => weapon.selected);
@@ -563,11 +582,12 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       speed: Math.round(speed), maxSpeed: stats.boostSpeed * getPowerProfile(powerMode).boost,
       flight: { velocity: { ...flight.velocity }, slip: flight.slip, turnAuthority: flight.turnAuthority, drifting: flight.drifting, throttleSpeed: flight.throttleSpeed },
       powerMode, powerProfile: getPowerProfile(powerMode),
-      repair: repairSystem.getSnapshot(),
+      squadron: coordination, systems: shipSystems.snapshot(), tacticalScore, wingOrder: wingOrders.snapshot(),
+      repair: { ...repairSystem.getSnapshot(), target: repairTarget },
       support: { ...supportSystem.getSnapshot(), active: supportWingmen.length > 0 },
       sfoils: { mode: sfoilsMode, openness: sfoilsOpenness, available: selectedShipId === 'xwing' },
       heat: Math.round(heat * 100), abilityCooldown: Math.max(0, abilityCooldown), abilityActive: abilityRemaining > 0,
-      weapon: { id: selectedWeapon.id, name: selectedWeapon.name, ammo: selectedWeapon.ammo, reserve: selectedWeapon.reserve, cooldown: selectedWeapon.cooldown, reloading: selectedWeapon.reloading, reloadRemaining: selectedWeapon.reloadRemaining, reloadDuration: selectedWeapon.reloadDuration, locked, lockProgress: lock.progress, lockStatus: lock.status, lockDuration: lock.duration, lockTargetId: lockCandidate?.id || null, guidance: locked ? 'guided' : 'unguided' },
+      weapon: { id: selectedWeapon.id, name: selectedWeapon.name, ammo: selectedWeapon.ammo, reserve: selectedWeapon.reserve, cooldown: Math.max(selectedWeapon.cooldown, weaponFaultDelay), reloading: selectedWeapon.reloading, reloadRemaining: selectedWeapon.reloadRemaining, reloadDuration: selectedWeapon.reloadDuration, locked, lockProgress: lock.progress, lockStatus: lock.status, lockDuration: lock.duration / shipSystems.snapshot().effects.sensorLockRate, lockTargetId: lockCandidate?.id || null, guidance: locked ? 'guided' : 'unguided' },
       weapons: availableWeapons,
       kills, targetCount: enemies.filter(enemy => !enemy.disabled).length, elapsed: totalElapsed,
       mission: active ? { ...state.mission, progress: Math.round(state.progress / state.target * 100), count: state.progress, target: state.target } : null,
@@ -580,7 +600,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       escortTactics: state.phase === 'escort' ? escortTactics.snapshot() : null,
       escortDistance: state.phase === 'escort' ? Math.max(0, escortAnchor.z - (escortWaypoints[state.progress] ?? escortAnchor.z)) : null,
       sideObjectives: [...(state.sideObjectives || []), ...content.sideObjectives], content,
-      worldMarkers: [...(state.phase === 'escort' ? enemies.filter(enemy => !enemy.disabled && ['escort-route-battery', 'escort-power-node'].includes(enemy.id)).map(enemy => ({ id: enemy.id, position: enemy.mesh.position, label: enemy.id === 'escort-route-battery' ? 'ТЯЖЁЛАЯ БАТАРЕЯ' : 'ПИТАЮЩИЙ УЗЕЛ · ЩИТЫ +25' })) : []), ...content.sideObjectives.flatMap(objective => {
+      worldMarkers: [...(coordination.pendingReinforcement ? enemies.filter(enemy => enemy.id === coordination.pendingReinforcement.enemyId).map(enemy => ({ id: 'reinforcement-caller', position: enemy.mesh.position, label: `ВЫЗОВ ПОДКРЕПЛЕНИЯ · ${coordination.pendingReinforcement.remaining.toFixed(1)} С` })) : []), ...(state.phase === 'escort' ? enemies.filter(enemy => !enemy.disabled && ['escort-route-battery', 'escort-power-node'].includes(enemy.id)).map(enemy => ({ id: enemy.id, position: enemy.mesh.position, label: enemy.id === 'escort-route-battery' ? 'ТЯЖЁЛАЯ БАТАРЕЯ' : 'ПИТАЮЩИЙ УЗЕЛ · ЩИТЫ +25' })) : []), ...content.sideObjectives.flatMap(objective => {
         if (objective.status !== 'active') return [];
         if (objective.kind === 'scan') return [{ id: objective.id, position: objective.position, label: 'ДАТЧИК · CTRL / СКАН', progress: objective.progress / objective.target }];
         const ids = objective.targetIds || [objective.targetId];
@@ -605,6 +625,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   function syncCampaign() {
     const state = campaign.getSnapshot();
     if (state.failed && mode !== 'defeat') {
+      if (lastPhase === 'qte') audio.superlaserFire?.();
       mode = 'defeat';
       clearInput();
       exitPointerLock();
@@ -638,7 +659,14 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     if (!['playing', 'qte'].includes(mode)) return;
     const shielded = shields > 0;
     const next = absorbDamage(hull, shields, abilityRemaining > 0 && stats.ability.id === 'shield-focus' ? amount * 0.55 : amount);
+    const hullDamage = hull - next.health;
     hull = next.health;
+    const fault = shipSystems.damage(hullDamage);
+    if (fault) {
+      const system = shipSystems.snapshot().systems.find(item => item.id === fault);
+      onEvent({ type: 'system-damage', system: fault, name: system?.name });
+      onEvent({ type: 'radio', speaker: 'R2-D2', text: `Повреждение: ${system?.name || fault}. B — выбрать систему, V — ремонт. Корпус и системы ремонтируются отдельно.` });
+    }
     shields = next.shields;
     if (amount > 0 && repairSystem.interrupt()) onEvent({ type: 'repair', status: 'interrupted' });
     lastDamage = totalElapsed;
@@ -731,6 +759,9 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       const arrived = goalZ !== undefined && escortAnchor.z <= goalZ && allies.length > 0 && allies.every(ally => ally.mesh.position.distanceTo(escortAnchor.clone().add(ally.offset)) < 12);
       if (arrived && player.position.distanceTo(escortAnchor) <= 700) {
         campaign.recordEscortCheckpoint();
+        const reward = escortBonus.update({ phase: 'escort', allyHealth: allies.map(ally => ally.health / ally.maxHealth * 100), checkpoint: state.progress + 1 });
+        tacticalScore += reward.score;
+        for (const event of reward.events) onEvent({ ...event, type: 'side-complete', title: 'Золотая группа сохранена', bonus: reward.score });
         audio.cue();
       }
     }
@@ -742,13 +773,20 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       wingman.life -= dt;
       wingman.age += dt;
       wingman.fireTimer -= dt;
+      const targetId = wingOrders.selectTarget({ wingmanId: wingman.id,
+        enemies: enemies.map(enemy => ({ id: enemy.id, kind: enemy.kind, disabled: enemy.disabled, retreat: enemy.retreat, health: enemy.health, position: enemy.mesh.position })),
+        playerPosition: player.position, playerTargetId: findAimTarget({ lockDot: 0.88, range: 2200 })?.id,
+        escortAllies: allies.map(ally => ({ id: ally.id, health: ally.health / ally.maxHealth, position: ally.mesh.position })) });
+      wingman.target = enemies.find(enemy => enemy.id === targetId) || null;
       const target = wingman.target && enemies.includes(wingman.target) && wingman.target.health > 0 && !wingman.target.disabled && !wingman.target.retreat ? wingman.target : null;
       if (!target) wingman.target = null;
       let direction;
       if (target && wingman.mesh.position.distanceTo(target.mesh.position) > 105) {
         direction = target.mesh.position.clone().sub(wingman.mesh.position).normalize();
       } else {
-        direction = wingman.attackDirection.clone().add(new THREE.Vector3(wingman.side * 0.5, 0.2, 0)).normalize();
+        const anchor = wingOrders.snapshot().order === 'escort' && allies.length ? allies[0].mesh.position : player.position;
+        const formation = anchor.clone().add(new THREE.Vector3(wingman.side * 45, 20, 65));
+        direction = formation.sub(wingman.mesh.position).normalize();
       }
       wingman.velocity.copy(direction).multiplyScalar(190);
       wingman.mesh.position.addScaledVector(wingman.velocity, dt);
@@ -796,11 +834,12 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
 
   function firePlayer() {
     const weapon = armament.current();
-    if (mode !== 'playing' || repairSystem.getSnapshot().active || projectiles.length >= 128 || (weapon.heat > 0 && heat >= 0.97)) return;
+    if (mode !== 'playing' || weaponFaultDelay > 0 || repairSystem.getSnapshot().active || projectiles.length >= 128 || (weapon.heat > 0 && heat >= 0.97)) return;
     if (selectedShipId === 'xwing') {
       if (sfoilsMode === 'closed' || sfoilsOpenness < 1) return;
     }
     if (!armament.consumeShot()) return;
+    weaponFaultDelay = weapon.cooldown * shipSystems.snapshot().effects.weaponCooldown;
     const forward = FORWARD.clone().applyQuaternion(player.quaternion);
     const candidate = weapon.type === 'torpedo' ? findAimTarget(weapon) : null;
     const lock = targetLock.snapshot();
@@ -849,7 +888,10 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     mousePitch = 0;
     temporary.copy(FORWARD).applyQuaternion(player.quaternion);
     const phase = campaign.getSnapshot().phase;
-    stepFlight(flight, { dt, heading: temporary, stats, power, boosting, braking, turning, trench: phase === 'trench' });
+    const systems = shipSystems.snapshot().effects;
+    const flightStats = { ...stats, accelerationScale: systems.acceleration };
+    const flightPower = { ...power, speed: power.speed * systems.thrust, boost: power.boost * systems.thrust };
+    stepFlight(flight, { dt, heading: temporary, stats: flightStats, power: flightPower, boosting, braking, turning, trench: phase === 'trench' });
     speed = flight.speed;
     player.position.x += flight.velocity.x * dt;
     player.position.y += flight.velocity.y * dt;
@@ -868,6 +910,9 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
         resetFlightState(flight, FORWARD.clone().applyQuaternion(player.quaternion), speed);
         onEvent({ type: 'radio', speaker: 'Красный Лидер', text: 'Держитесь внутри траншеи. Не заденьте стену!' });
       }
+      // Scraping a wall or the floor adds a rushing pass-by.
+      const wallGap = Math.min(66 - Math.abs(player.position.x), player.position.y + 127, 105 - player.position.y);
+      if (wallGap < 26 && speed > stats.speed * 0.45) audio.whoosh?.(Math.max(0, wallGap * 34));
       const state = campaign.getSnapshot();
       const gate = world.checkpoints[state.progress];
       if (gate && player.position.z < gate.position.z + 16 && Math.abs(player.position.x - gate.position.x) < 48 && Math.abs(player.position.y - gate.position.y) < 48) {
@@ -908,6 +953,18 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   function updateEnemies(dt) {
     const phase = campaign.getSnapshot().phase;
     const retired = [];
+    const formation = phase === 'trench' ? { directives: [], events: [] } : squadron.update({
+      fighters: enemies.filter(enemy => enemy.kind === 'tie' && !enemy.disabled).map(enemy => ({ id: enemy.id, position: enemy.mesh.position, variant: enemy.variant, health: enemy.health })),
+      playerPosition: player.position, dt });
+    const directives = new Map(formation.directives.map(item => [item.id, item]));
+    for (const event of formation.events) {
+      onEvent(event);
+      onEvent({ type: 'radio', speaker: 'Красный Лидер', text: event.text });
+      if (event.code === 'reinforcement-request') {
+        const reinforcement = spawnTie(player.position.clone().add(new THREE.Vector3(600, 120, -800)), 'ace');
+        reinforcement.bonusOnly = true;
+      }
+    }
     const incoming = projectiles.filter(bolt => bolt.owner !== 'enemy').map(bolt => ({ owner: bolt.owner, position: bolt.mesh.position, velocity: bolt.velocity }));
     for (const enemy of enemies) {
       if (enemy.kind === 'relay' || enemy.disabled) continue;
@@ -919,6 +976,20 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
         enemy.mesh.position.addScaledVector(enemy.velocity, dt);
         enemy.mesh.quaternion.setFromUnitVectors(FORWARD, enemy.velocity.clone().normalize());
         if (enemy.mesh.position.distanceTo(player.position) > 1700) retired.push(enemy);
+        continue;
+      }
+      const tactics = directives.get(enemy.id);
+      enemy.pilotRole = tactics?.pilotRole;
+      enemy.squadRole = tactics?.role;
+      // Temporary withdrawal never removes a mandatory kill from campaign objectives.
+      if (tactics?.retreat && !enemy.withdrew) { enemy.withdrawRemaining = 3; enemy.withdrew = true; }
+      if (enemy.withdrawRemaining > 0) {
+        enemy.withdrawRemaining -= dt;
+        enemy.aiState = 'withdraw'; enemy.telegraph = false;
+        enemy.mesh.userData.attackTelegraph = false;
+        enemy.velocity.copy(enemy.mesh.position).sub(player.position).normalize().multiplyScalar(150);
+        enemy.mesh.position.addScaledVector(enemy.velocity, dt);
+        enemy.mesh.quaternion.setFromUnitVectors(FORWARD, enemy.velocity.clone().normalize());
         continue;
       }
       enemy.stun = Math.max(0, enemy.stun - dt);
@@ -935,6 +1006,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       enemy.fireTimer -= dt;
       if (enemy.kind === 'tie' || enemy.kind === 'vader') {
         const decision = updateEnemyBrain(enemy.brain, {
+          tactics: allyTarget || enemy.withdrew ? { ...tactics, targetOffset: null } : tactics,
           position: enemy.mesh.position,
           forward: FORWARD.clone().applyQuaternion(enemy.mesh.quaternion),
           velocity: enemy.velocity,
@@ -969,7 +1041,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       enemy.mesh.userData.attackTelegraph = Boolean(enemy.telegraph);
       if (shouldFire && phase !== 'qte') {
         // Prediction follows observed velocity; aim error and visible bolts still allow evasion.
-        const scatter = enemy.variant === 'ace' ? 0.045 : 0.065;
+        const scatter = (enemy.variant === 'ace' ? 0.045 : 0.065) * (1 / (tactics?.aimScale || 1));
         direction.add(new THREE.Vector3((Math.random() - 0.5) * scatter, (Math.random() - 0.5) * scatter, (Math.random() - 0.5) * scatter)).normalize();
         const barrel = enemy.kind === 'turret' ? enemy.mesh.userData.head : enemy.mesh;
         const barrelDirection = FORWARD.clone().applyQuaternion(barrel?.quaternion || enemy.mesh.quaternion);
@@ -1089,7 +1161,8 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     if (mode === 'cinematic' || mode === 'victory') {
       const t = mode === 'victory' ? 12 : campaign.getSnapshot().elapsed;
       world.updateCinema(t, camera);
-      if (t > 4.6 && !explosionPlayed) { explosionPlayed = true; audio.explosion(); }
+      if (t > 0.35 && !torpedoImpactPlayed) { torpedoImpactPlayed = true; audio.torpedoImpact?.(); }
+      if (t > 4.6 && !explosionPlayed) { explosionPlayed = true; audio.stationExplosion?.(); }
       return;
     }
     if (mode === 'qte' && typeof world.updateQte === 'function') {
@@ -1152,14 +1225,16 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       abilityCooldown = Math.max(0, abilityCooldown - dt);
       abilityRemaining = Math.max(0, abilityRemaining - dt);
       const power = getPowerProfile(powerMode);
-      heat = Math.max(0, heat - dt * 0.26 * power.cooling);
+      weaponFaultDelay = Math.max(0, weaponFaultDelay - dt);
+      heat = Math.max(0, heat - dt * 0.26 * power.cooling * shipSystems.snapshot().effects.weaponCooling);
       if (totalElapsed - lastDamage > 6) shields = Math.min(stats.shield, shields + stats.shieldRegen * power.shieldRegen * dt);
       const repaired = repairSystem.update(dt);
       supportSystem.update(dt);
       if (repaired > 0) {
-        hull = Math.min(stats.hull, hull + repaired);
+        const restored = repairTarget === 'hull' ? Math.min(repaired, stats.hull - hull) : shipSystems.repair(40);
+        if (repairTarget === 'hull') hull += restored;
         audio.cue();
-        onEvent({ type: 'repair', status: 'complete', amount: repaired });
+        onEvent({ type: 'repair', status: 'complete', amount: restored, target: repairTarget });
       }
       updateFlight(dt);
       if (mode === 'playing') {
@@ -1183,6 +1258,13 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       handleMissionEvents(missionDirector.update({ dt }));
       campaign.update(dt);
       syncCampaign();
+      if (mode === 'qte') {
+        const qte = campaign.getSnapshot().qte;
+        if (qte && qte.totalRemaining <= 6 && !superlaserCharging) {
+          superlaserCharging = true;
+          audio.superlaserCharge?.(qte.totalRemaining);
+        }
+      }
     }
     if (mode !== 'paused') updateCamera(dt);
     shipMesh.userData.engineBoost = mode === 'playing' && (keys.has('ShiftLeft') || keys.has('ShiftRight')) ? 1 : 0;
@@ -1242,6 +1324,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     relayBonus = false;
     powerMode = 'balanced';
     repairSystem.reset();
+    shipSystems.reset(); wingOrders.reset(); escortBonus.reset(); tacticalScore = 0; weaponFaultDelay = 0; repairTarget = 'hull';
     supportSystem.reset();
     sfoilsMode = 'auto';
     sfoilsOpenness = 1;
@@ -1290,15 +1373,31 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     return true;
   }
   function repair() {
-    if (mode !== 'playing' || !repairSystem.start(hull, stats.hull)) return false;
+    if (mode !== 'playing') return false;
+    const system = shipSystems.snapshot();
+    const integrity = system.selected === 'hull' ? hull / stats.hull * 100 : system.systems.find(item => item.id === system.selected)?.integrity;
+    if (!repairSystem.start(integrity, 100)) return false;
+    repairTarget = system.selected;
     audio.cue();
     onEvent({ type: 'repair', status: 'start', duration: 3 });
     emitSnapshot();
     return true;
   }
+  function selectRepair(id) {
+    if (mode !== 'playing' || repairSystem.getSnapshot().active) return false;
+    const result = id ? shipSystems.selectRepair(id) : shipSystems.cycleRepair();
+    emitSnapshot(); return Boolean(result);
+  }
+  function setWingOrder(order) {
+    if (mode !== 'playing') return false;
+    const result = order ? wingOrders.setOrder(order) : wingOrders.cycleOrder();
+    if (result) onEvent({ type: 'radio', speaker: 'Красная группа', text: wingOrders.snapshot().description });
+    emitSnapshot(); return Boolean(result);
+  }
   function requestSupport() {
     if (mode !== 'playing') return false;
-    const target = findAimTarget({ lockDot: 0.88, range: 2200 });
+    const orderTargetId = wingOrders.selectTarget({ enemies: enemies.map(enemy => ({ ...enemy, position: enemy.mesh.position })), playerPosition: player.position, escortAllies: allies.map(ally => ({ ...ally, position: ally.mesh.position })), playerTargetId: findAimTarget({ lockDot: 0.88, range: 2200 })?.id });
+    const target = enemies.find(enemy => enemy.id === orderTargetId);
     if (!target) { onEvent({ type: 'support', status: 'no-target' }); return false; }
     if (!supportSystem.request()) return false;
     const forward = FORWARD.clone().applyQuaternion(player.quaternion);
@@ -1390,7 +1489,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     return result;
   }
 
-  const consumedKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'KeyC', 'KeyF', 'KeyR', 'KeyV', 'KeyT', 'KeyX', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Escape']);
+  const consumedKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'KeyC', 'KeyF', 'KeyR', 'KeyV', 'KeyT', 'KeyB', 'KeyG', 'KeyX', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Escape']);
   addListener(window, 'keydown', event => {
     if (/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName)) return;
     if (consumedKeys.has(event.code) && mode !== 'menu') event.preventDefault();
@@ -1404,6 +1503,8 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     }
     if (event.code === 'KeyF' && !event.repeat) useAbility();
     if (event.code === 'KeyR') { if (!event.repeat) reloadWeapon(); return; }
+    if (event.code === 'KeyB') { if (!event.repeat) selectRepair(); return; }
+    if (event.code === 'KeyG') { if (!event.repeat) setWingOrder(); return; }
     if (event.code === 'KeyV') { if (!event.repeat) repair(); return; }
     if (event.code === 'KeyT') { if (!event.repeat) requestSupport(); return; }
     if (event.code === 'KeyX') { if (!event.repeat) toggleSfoils(); return; }
@@ -1437,7 +1538,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   });
 
   const api = {
-    start, pause, resume, restart: () => start({ shipId: sortieShipId }), setCamera, setPowerMode, repair, requestSupport, toggleSfoils, selectWeapon, cycleWeapon, reloadWeapon, useAbility, submitQte,
+    start, pause, resume, restart: () => start({ shipId: sortieShipId }), setCamera, setPowerMode, repair, selectRepair, setWingOrder, requestSupport, toggleSfoils, selectWeapon, cycleWeapon, reloadWeapon, useAbility, submitQte,
     getSnapshot,
     setGraphicsQuality(value) {
       if (!['hd', 'performance'].includes(value)) return false;
@@ -1485,9 +1586,9 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       content: missionDirector.getSnapshot(),
       missionProps: missionProps.map(prop => ({ id: prop.id, kind: prop.kind, position: prop.mesh.position.toArray() })),
       audio: audio.getSampleStatus?.() || { state: 'unavailable', events: [] },
-      enemies: enemies.map(enemy => ({ id: enemy.id, bonusOnly: Boolean(enemy.bonusOnly), disabled: Boolean(enemy.disabled), kind: enemy.kind, variant: enemy.variant, health: enemy.health, stunned: enemy.stun, retreat: Boolean(enemy.retreat), position: enemy.mesh.position.toArray(), quaternion: enemy.mesh.quaternion.toArray(), velocity: enemy.velocity.toArray(), aiState: enemy.aiState || 'tracking', aiTarget: enemy.aiTarget || 'player', telegraph: Boolean(enemy.telegraph), evading: Boolean(enemy.evading), lastShotAt: enemy.lastShotAt ?? null, aimDirection: enemy.aiAim ? [enemy.aiAim.x, enemy.aiAim.y, enemy.aiAim.z] : null, model: enemy.mesh.userData.modelStatus })),
+      enemies: enemies.map(enemy => ({ id: enemy.id, bonusOnly: Boolean(enemy.bonusOnly), disabled: Boolean(enemy.disabled), kind: enemy.kind, pilotRole: enemy.pilotRole, squadRole: enemy.squadRole, variant: enemy.variant, health: enemy.health, stunned: enemy.stun, retreat: Boolean(enemy.retreat), position: enemy.mesh.position.toArray(), quaternion: enemy.mesh.quaternion.toArray(), velocity: enemy.velocity.toArray(), aiState: enemy.aiState || 'tracking', aiTarget: enemy.aiTarget || 'player', telegraph: Boolean(enemy.telegraph), evading: Boolean(enemy.evading), lastShotAt: enemy.lastShotAt ?? null, aimDirection: enemy.aiAim ? [enemy.aiAim.x, enemy.aiAim.y, enemy.aiAim.z] : null, model: enemy.mesh.userData.modelStatus })),
       allies: allies.map(ally => ({ id: ally.id, name: ally.name, kind: ally.kind, health: ally.health, shields: ally.shields, position: ally.mesh.position.toArray(), velocity: ally.velocity.toArray() })),
-      supportWingmen: supportWingmen.map(wingman => ({ id: wingman.id, position: wingman.mesh.position.toArray(), life: wingman.life, targetPosition: wingman.target?.mesh.position.toArray() || null })),
+      supportWingmen: supportWingmen.map(wingman => ({ id: wingman.id, position: wingman.mesh.position.toArray(), life: wingman.life, targetId: wingman.target?.id || null, targetPosition: wingman.target?.mesh.position.toArray() || null })),
       sfoilsRig: shipMesh.userData.sfoils ? { ...shipMesh.userData.sfoils } : null,
       escortAnchor: escortAnchor.toArray(), relayBonus,
       playerPosition: player.position.toArray(), playerQuaternion: player.quaternion.toArray(),

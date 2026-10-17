@@ -109,7 +109,7 @@ test('repair channels block player fire, freeze on pause and heal hull; incoming
     assert.equal(game.getSnapshot().repair.charges, 1);
     assert.equal(game.repair(), false);
     game.restart();
-    assert.deepEqual(game.getSnapshot().repair, { charges: 2, active: false, remaining: 0, cooldown: 0 });
+    assert.deepEqual(game.getSnapshot().repair, { charges: 2, active: false, remaining: 0, cooldown: 0, target: 'hull' });
   } finally { fixture.close(); }
 });
 

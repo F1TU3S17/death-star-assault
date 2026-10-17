@@ -323,3 +323,55 @@ test('physical combat, surface, escort, defense and trench can be completed with
     assert.ok(final.health > 0);
   } finally { fixture.close(); }
 });
+
+test('entering the trench announces the run with the station klaxon', async () => {
+  const fixture = await engineHarness();
+  try {
+    const { debug } = fixture;
+    fixture.game.start();
+    assert.equal(fixture.audioCalls.filter(call => call.name === 'klaxon').length, 0);
+    engineReachPhase(debug, 'trench');
+    assert.equal(debug.snapshot().phase, 'trench');
+    assert.equal(fixture.audioCalls.filter(call => call.name === 'klaxon').length, 1);
+  } finally { fixture.close(); }
+});
+
+test('the trench run charges the superlaser in the last seconds and fires it on timeout', async () => {
+  const fixture = await engineHarness();
+  try {
+    const { game, debug } = fixture;
+    game.start();
+    engineReachPhase(debug, 'qte');
+    assert.equal(game.getSnapshot().mode, 'qte');
+    assert.equal(fixture.audioCalls.some(call => call.name === 'superlaserCharge'), false, 'A fresh window must not start charging');
+    // Each wrong key spends the retry penalty without advancing the shot: six of them leave four seconds.
+    for (let attempt = 0; attempt < 6; attempt++) assert.equal(game.submitQte('KeyD'), false);
+    assert.equal(game.getSnapshot().qte.totalRemaining, 4);
+    debug.step(0.05);
+    const charge = fixture.audioCalls.findIndex(call => call.name === 'superlaserCharge');
+    assert.ok(charge > -1, 'The gun must start charging once the window drops to six seconds');
+    assert.ok(fixture.audioCalls[charge].args[0] <= 6);
+    assert.equal(fixture.audioCalls.filter(call => call.name === 'superlaserCharge').length, 1, 'A charge in progress must not retrigger');
+    debug.step(30);
+    assert.equal(game.getSnapshot().mode, 'defeat');
+    const fire = fixture.audioCalls.findIndex(call => call.name === 'superlaserFire');
+    assert.ok(fire > charge, 'The station must open fire only after the charge');
+  } finally { fixture.close(); }
+});
+
+test('the death star cine lands the torpedo impact before the station explosion', async () => {
+  const fixture = await engineHarness();
+  try {
+    const { game, debug } = fixture;
+    game.start();
+    engineReachPhase(debug, 'qte');
+    for (const code of ['KeyA', 'KeyD', 'KeyW', 'Space']) { fixture.key(code); fixture.key(code, false); }
+    assert.equal(game.getSnapshot().mode, 'cinematic');
+    debug.step(12.1);
+    const impact = fixture.audioCalls.findIndex(call => call.name === 'torpedoImpact');
+    const station = fixture.audioCalls.findIndex(call => call.name === 'stationExplosion');
+    assert.ok(impact > -1, 'The torpedoes must strike the shaft');
+    assert.ok(station > -1, 'The station must detonate');
+    assert.ok(impact < station, 'The impact must land before the chain reaction');
+  } finally { fixture.close(); }
+});

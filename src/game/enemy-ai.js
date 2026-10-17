@@ -59,6 +59,10 @@ export function createEnemyBrain(variant = 'line', seed = 0) {
 export function updateEnemyBrain(brain, context, delta) {
   const dt = Math.min(0.1, Math.max(0, Number(delta) || 0));
   const profile = getEnemyProfile(brain.variant);
+  const tactics = context.tactics;
+  if (tactics?.pilotRole === 'novice') { profile.turnRate *= .82; profile.reaction *= 1.5; }
+  if (tactics?.pilotRole === 'veteran' || tactics?.pilotRole === 'leader') profile.turnRate *= 1.12;
+  profile.shotInterval *= tactics?.cooldownScale || 1;
   const { position, target, corridor } = context;
   const forward = unit(context.forward);
   const velocity = context.velocity || ZERO;
@@ -101,6 +105,12 @@ export function updateEnemyBrain(brain, context, delta) {
     const flank = add(sub(target.position, mul(targetHeading, 260)), mul(right, side * 210));
     desired = unit(sub(flank, position));
   }
+  if (tactics?.targetOffset && ['approach', 'reposition'].includes(brain.state) && distance > 300) {
+    desired = unit(sub(add(target.position, tactics.targetOffset), position));
+  }
+  if (tactics?.pilotRole === 'novice' && brain.state === 'approach') {
+    desired = unit(add(desired, { x: Math.sin(brain.elapsed * 1.7 + brain.seed) * .085, y: Math.cos(brain.elapsed * 1.3) * .055, z: 0 }));
+  }
   if (corridor) {
     // A trench is a forward pass, never an impossible U-turn through the walls.
     desired = unit({ x: Math.max(-0.24, Math.min(0.24, desired.x * 0.35)), y: Math.max(-0.15, Math.min(0.15, (-45 - position.y) * 0.008)), z: -1 });
@@ -129,6 +139,7 @@ export function updateEnemyBrain(brain, context, delta) {
   const fire = brain.state === 'attack' && brain.shotCooldown <= 0 && distance > 160 && distance < 650 && dot(direction, aimDirection) >= Math.cos(profile.fireCone) && brain.evadeRemaining === 0;
   if (fire) brain.shotCooldown = profile.shotInterval;
   let speed = context.cruiseSpeed || profile.speed;
+  speed *= tactics?.speedMultiplier || 1;
   if (brain.state === 'break') speed *= 1.08;
   if (distance < 95) speed *= 0.7;
   return { direction, aimDirection, speed, fire, state: brain.state, telegraph: brain.state === 'telegraph', evading: brain.evadeRemaining > 0 };

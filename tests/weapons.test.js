@@ -172,8 +172,19 @@ test('blue Y-wing ion projectiles stun only after impact and preserve the target
     fixture.key('Space'); debug.step(0.025); fixture.key('Space', false);
     assert.ok(debug.inspect().projectileDetails.some(projectile => projectile.type === 'ion'));
     assert.equal(debug.inspect().enemies.some(enemy => enemy.stunned > 0), false, 'no instantaneous stun on firing');
-    debug.step(1.2);
-    assert.ok(debug.inspect().enemies.some(enemy => enemy.stunned > 2));
+    // Track observed movement: coordinated fighters no longer fly a fixed approach.
+    let stunned = false;
+    for (let elapsed = 0; elapsed < 3 && !stunned; elapsed += 0.025) {
+      const moving = debug.inspect().enemies.find(enemy => enemy.id === target.id);
+      assert.ok(moving, 'ion fire must preserve the tracked fighter');
+      const distance = new THREE.Vector3(...moving.position).distanceTo(fixture.player().position);
+      const lead = new THREE.Vector3(...moving.position).addScaledVector(new THREE.Vector3(...moving.velocity), distance / SHIPS.ywing.weapons.find(weapon => weapon.id === 'ion-cannon').speed);
+      fixture.player().quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), lead.sub(fixture.player().position).normalize());
+      fixture.key('Space'); debug.step(0.025);
+      stunned = debug.inspect().enemies.some(enemy => enemy.stunned > 2);
+    }
+    fixture.key('Space', false);
+    assert.ok(stunned, 'a manually led ion bolt must physically hit the maneuvering target');
     assert.equal(game.getSnapshot().kills, 0);
   } finally { fixture.close(); }
 });

@@ -1660,7 +1660,7 @@ body[data-mode=cinematic] .hud {
     padding:7px
   }
   #sound:after {
-    content: '♪';
+    content: 'в™Є';
     font-size:12px
   }
   .flight-telemetry {
@@ -2427,3 +2427,16 @@ body[data-mode=qte]::after { bottom: 0; }
   .touch-controls { left: 50%; bottom: 86px; }
   .toast { top: 71px; width: 51%; padding: 8px; }
 }
+
+/* Tactical Battles: controls stay in the existing collapsible avionics panel. */
+.system-choice { display: grid; gap: 5px; margin: 9px 0; color: var(--hud-cyan); font-size: 8px; letter-spacing: .5px; }
+.system-choice select { width: 100%; min-height: 28px; background: #101923; color: #edf4f6; border: 1px solid #72828f70; border-radius: 2px; font: inherit; padding: 4px; }
+.systems-status { display: grid; gap: 3px; padding-bottom: 6px; color: #afc2cc; font-size: 8px; }
+.systems-status .damaged { color: #ffba64; }
+.target-distance { white-space: normal; }
+
+/* Tactical Battles: controls stay in the existing collapsible avionics panel. */
+.system-choice { display: grid; gap: 5px; margin: 9px 0; color: var(--hud-cyan); font-size: 8px; letter-spacing: .5px; }
+.system-choice select { width: 100%; min-height: 28px; background: #101923; color: #edf4f6; border: 1px solid #72828f70; border-radius: 2px; font: inherit; padding: 4px; }
+.systems-status { display: grid; gap: 3px; padding-bottom: 6px; color: #afc2cc; font-size: 8px; }
+.systems-status .damaged { color: #ffba64; }
