@@ -8,6 +8,7 @@ import { createWorld, createShip, createTurret, createCockpit } from './world.js
 import { createAudio } from './audio.js';
 import { createRenderPipeline } from './render-pipeline.js';
 import { createSceneLighting } from './scene-lighting.js';
+import { createFlightState, resetFlightState, stepFlight, getFlightTurnAuthority } from './flight-model.js';
 import { absorbDamage, segmentSphereHit, clampFrameDelta, createArmament, insideLockCone, steerDirection, splashDamage, getPowerProfile, createRepairSystem, createSupportSystem } from './simulation.js';
 
 const FORWARD = new THREE.Vector3(0, 0, -1);
@@ -145,6 +146,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   let hull = stats.hull;
   let shields = stats.shield;
   let speed = 0;
+  const flight = createFlightState();
   let armament = createArmament(stats.weapons || SHIPS.xwing.weapons);
   let heat = 0;
   let abilityCooldown = 0;
@@ -417,6 +419,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       mode = 'victory';
       onEvent({ type: 'victory', elapsed: totalElapsed, kills });
     }
+    resetFlightState(flight, FORWARD.clone().applyQuaternion(player.quaternion), speed);
     setupMissionContent(phase);
     if (previous !== 'menu' && previous !== phase) {
       onEvent({ type: 'mission-complete', missionId: previous });
@@ -485,6 +488,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       reticle: { x: reticlePoint.x * 0.5 + 0.5, y: 0.5 - reticlePoint.y * 0.5 },
       health: Math.round(hull / stats.hull * 100), shields: Math.round(shields / stats.shield * 100),
       speed: Math.round(speed), maxSpeed: stats.boostSpeed * getPowerProfile(powerMode).boost,
+      flight: { velocity: { ...flight.velocity }, slip: flight.slip, turnAuthority: flight.turnAuthority, drifting: flight.drifting, throttleSpeed: flight.throttleSpeed },
       powerMode, powerProfile: getPowerProfile(powerMode),
       repair: repairSystem.getSnapshot(),
       support: { ...supportSystem.getSnapshot(), active: supportWingmen.length > 0 },
@@ -754,23 +758,27 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     const pitch = (keys.has('KeyW') ? 1 : 0) - (keys.has('KeyS') ? 1 : 0);
     const yaw = (keys.has('KeyA') ? 1 : 0) - (keys.has('KeyD') ? 1 : 0);
     const roll = (keys.has('KeyQ') ? 1 : 0) - (keys.has('KeyE') ? 1 : 0);
-    const turnRate = stats.turnRate * (keys.has('ShiftLeft') || keys.has('ShiftRight') ? 0.65 : 1);
-    rotation.setFromAxisAngle(AXIS_X, (pitch * turnRate * dt + mousePitch));
-    player.quaternion.multiply(rotation);
-    rotation.setFromAxisAngle(UP, yaw * turnRate * dt + mouseYaw);
-    player.quaternion.multiply(rotation);
-    rotation.setFromAxisAngle(AXIS_Z, roll * turnRate * dt);
-    player.quaternion.multiply(rotation).normalize();
-    mouseYaw = 0;
-    mousePitch = 0;
     const boosting = keys.has('ShiftLeft') || keys.has('ShiftRight');
     const braking = keys.has('ControlLeft') || keys.has('ControlRight');
     const power = getPowerProfile(powerMode);
-    const targetSpeed = boosting ? stats.boostSpeed * power.boost : stats.speed * power.speed * (braking ? 0.42 : 1);
-    speed = THREE.MathUtils.damp(speed, targetSpeed, 2.8, dt);
+    const authority = getFlightTurnAuthority(speed, stats.speed * power.speed);
+    const turnRate = stats.turnRate * authority;
+    rotation.setFromAxisAngle(AXIS_X, pitch * turnRate * dt + THREE.MathUtils.clamp(mousePitch, -.16, .16) * authority);
+    player.quaternion.multiply(rotation);
+    rotation.setFromAxisAngle(UP, yaw * turnRate * dt + THREE.MathUtils.clamp(mouseYaw, -.16, .16) * authority);
+    player.quaternion.multiply(rotation);
+    rotation.setFromAxisAngle(AXIS_Z, roll * stats.turnRate * dt);
+    player.quaternion.multiply(rotation).normalize();
+    const turning = Boolean(pitch || yaw || Math.abs(mouseYaw) + Math.abs(mousePitch) > .0001);
+    mouseYaw = 0;
+    mousePitch = 0;
     temporary.copy(FORWARD).applyQuaternion(player.quaternion);
-    player.position.addScaledVector(temporary, speed * dt);
     const phase = campaign.getSnapshot().phase;
+    stepFlight(flight, { dt, heading: temporary, stats, power, boosting, braking, turning, trench: phase === 'trench' });
+    speed = flight.speed;
+    player.position.x += flight.velocity.x * dt;
+    player.position.y += flight.velocity.y * dt;
+    player.position.z += flight.velocity.z * dt;
     collisionCooldown = Math.max(0, collisionCooldown - dt);
     if (phase === 'trench') {
       const inWall = Math.abs(player.position.x) > 66 && player.position.y < 75;
@@ -782,6 +790,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
         player.position.y = THREE.MathUtils.clamp(player.position.y, -105, 25);
         player.quaternion.slerp(new THREE.Quaternion(), 0.8);
         speed *= 0.6;
+        resetFlightState(flight, FORWARD.clone().applyQuaternion(player.quaternion), speed);
         onEvent({ type: 'radio', speaker: 'Красный Лидер', text: 'Держитесь внутри траншеи. Не заденьте стену!' });
       }
       const state = campaign.getSnapshot();
@@ -794,6 +803,8 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
         // A missed gate must be flown through; bring the route back into view.
         player.position.set(gate.position.x, -45, gate.position.z + 180);
         player.quaternion.identity();
+        resetFlightState(flight, FORWARD, speed * .6);
+        speed = flight.speed;
         damagePlayer(12);
       }
     } else if (phase === 'surface' && player.position.y < -120 && collisionCooldown === 0) {
@@ -801,16 +812,20 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       collisionCooldown = 1.5;
       player.position.y = -65;
       player.quaternion.slerp(new THREE.Quaternion(), 0.8);
+      resetFlightState(flight, FORWARD.clone().applyQuaternion(player.quaternion), speed * .6);
+      speed = flight.speed;
     }
     // Long-distance free flight stays navigable: mission targets never disappear forever.
     if (phase === 'combat' && player.position.length() > 4500) {
       temporary.copy(player.position).normalize();
       player.quaternion.setFromUnitVectors(FORWARD, temporary.negate());
+      resetFlightState(flight, FORWARD.clone().applyQuaternion(player.quaternion), speed);
       onEvent({ type: 'radio', speaker: 'Управление Явина', text: 'Вы покидаете зону прикрытия. Возвращайтесь к группе.' });
     }
     if (phase === 'surface' && player.position.length() > 5500) {
       player.position.set(0, 70, 650);
       player.quaternion.identity();
+      resetFlightState(flight, FORWARD, speed);
     }
     if (keys.has('Space') || mouseFiring) firePlayer();
   }
@@ -836,7 +851,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       const engagePlayer = enemy.variant === 'ace' && enemy.mesh.position.distanceTo(player.position) < 300;
       const allyTarget = ['escort', 'defend'].includes(phase) && allies.length && !engagePlayer ? allies[Math.floor(enemy.seed) % allies.length] : null;
       const targetPosition = allyTarget?.mesh.position || player.position;
-      const targetVelocity = allyTarget?.velocity || FORWARD.clone().applyQuaternion(player.quaternion).multiplyScalar(speed);
+      const targetVelocity = allyTarget?.velocity || new THREE.Vector3(flight.velocity.x, flight.velocity.y, flight.velocity.z);
       const distance = targetPosition.distanceTo(enemy.mesh.position);
       const previousTelegraph = enemy.telegraph;
       enemy.aiTarget = allyTarget?.id || 'player';
@@ -1036,6 +1051,11 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       cockpit.visible = false;
       shipMesh.visible = true;
     }
+    if (mode === 'playing' && (keys.has('ShiftLeft') || keys.has('ShiftRight'))) {
+      // Subtle angular engine vibration keeps speed feedback sharp, without image blur.
+      camera.rotateX(Math.sin(totalElapsed * 43) * 0.0014);
+      camera.rotateZ(Math.sin(totalElapsed * 57) * 0.0008);
+    }
   }
 
   function update(dt) {
@@ -1139,6 +1159,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     totalElapsed = 0;
     kills = 0;
     speed = 0;
+    resetFlightState(flight);
     armament.reset();
     tieSoundTimer = 1;
     relaysDestroyed = 0;
@@ -1392,6 +1413,8 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       sfoilsRig: shipMesh.userData.sfoils ? { ...shipMesh.userData.sfoils } : null,
       escortAnchor: escortAnchor.toArray(), relayBonus,
       playerPosition: player.position.toArray(), playerQuaternion: player.quaternion.toArray(),
+      playerVelocity: [flight.velocity.x, flight.velocity.y, flight.velocity.z],
+      flight: { speed: flight.speed, throttleSpeed: flight.throttleSpeed, slip: flight.slip, turnAuthority: flight.turnAuthority, drifting: flight.drifting },
       cameraPosition: camera.position.toArray(), cameraQuaternion: camera.quaternion.toArray(), cameraNear: camera.near,
       orbitalStationVisible: Boolean(world.space?.visible),
       projectileDetails: projectiles.map(projectile => ({ type: projectile.type || 'laser', owner: projectile.owner, damage: projectile.damage, locked: Boolean(projectile.target), position: projectile.mesh.position.toArray(), velocity: projectile.velocity.toArray() })),
