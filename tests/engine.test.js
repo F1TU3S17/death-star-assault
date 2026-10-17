@@ -22,9 +22,9 @@ test('actual engine flies, turns, fires, changes camera, pauses and freezes cool
     fixture.key('KeyA', false);
     assert.ok(game.getSnapshot().position.x < 0);
     fixture.key('Space');
-    debug.step(0.1);
+    for (let frame = 0; frame < 40 && !debug.inspect().projectileDetails.some(projectile => projectile.owner === 'player'); frame++) debug.step(0.025);
     fixture.key('Space', false);
-    assert.ok(debug.inspect().projectiles > 0);
+    assert.ok(debug.inspect().projectileDetails.some(projectile => projectile.owner === 'player'));
     fixture.key('KeyC'); fixture.key('KeyC', false);
     assert.equal(game.getSnapshot().camera, 'cockpit');
     assert.equal(game.useAbility(), true);
@@ -43,6 +43,25 @@ test('actual engine flies, turns, fires, changes camera, pauses and freezes cool
     fixture.window.dispatch('blur');
     assert.equal(game.getSnapshot().mode, 'paused');
   } finally { fixture.close(); }
+});
+
+test('shield power allocation changes actual regeneration rather than only the displayed profile', async () => {
+  const restored = {};
+  for (const power of ['balanced', 'engines', 'shields']) {
+    const fixture = await engineHarness();
+    try {
+      const { game, debug } = fixture;
+      game.start();
+      // Isolate regeneration from incoming fire without changing resources outside the damage API.
+      fixture.player().position.set(0, 1800, 600);
+      debug.damage(50);
+      game.setPowerMode(power);
+      debug.step(8);
+      restored[power] = game.getSnapshot().shields;
+    } finally { fixture.close(); }
+  }
+  assert.ok(restored.shields > restored.balanced, JSON.stringify(restored));
+  assert.ok(restored.engines < restored.balanced, JSON.stringify(restored));
 });
 
 test('QTE pause, wrong input, timeout defeat, final shot and Y-wing restart remain consistent', async () => {

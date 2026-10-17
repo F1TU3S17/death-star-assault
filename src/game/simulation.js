@@ -120,3 +120,67 @@ export function splashDamage(distance, radius, damage) {
   if (!Number.isFinite(distance) || !Number.isFinite(radius) || radius <= 0 || distance >= radius) return 0;
   return Math.max(0, Number(damage) || 0) * (1 - Math.max(0, distance) / radius);
 }
+
+const POWER_PROFILES = {
+  balanced: { speed: 1, boost: 1, damage: 1, cooling: 1, shieldRegen: 1 },
+  engines: { speed: 1.18, boost: 1.18, damage: 1, cooling: 0.75, shieldRegen: 0.6 },
+  weapons: { speed: 0.9, boost: 0.9, damage: 1.2, cooling: 1.2, shieldRegen: 1 },
+  shields: { speed: 0.88, boost: 0.88, damage: 1, cooling: 0.72, shieldRegen: 2 },
+};
+
+/** Arcade multipliers model diverting power between the ship's existing systems. */
+export function getPowerProfile(mode = 'balanced') {
+  return { ...(POWER_PROFILES[mode] || POWER_PROFILES.balanced) };
+}
+
+export function createRepairSystem() {
+  let charges, active, remaining, cooldown;
+  function reset() { charges = 2; active = false; remaining = 0; cooldown = 0; }
+  function start(health, maxHealth) {
+    if (active || cooldown > 0 || charges <= 0 || health >= maxHealth) return false;
+    charges -= 1;
+    active = true;
+    remaining = 3;
+    cooldown = 20;
+    return true;
+  }
+  function interrupt() {
+    if (!active) return false;
+    active = false;
+    remaining = 0;
+    return true;
+  }
+  function update(dt) {
+    if (!Number.isFinite(dt) || dt <= 0) return 0;
+    cooldown = Math.max(0, cooldown - dt);
+    if (cooldown < 1e-8) cooldown = 0;
+    if (!active) return 0;
+    remaining = Math.max(0, remaining - dt);
+    if (remaining > 1e-8) return 0;
+    remaining = 0;
+    active = false;
+    return 25;
+  }
+  const getSnapshot = () => ({ charges, active, remaining, cooldown });
+  reset();
+  return { reset, start, interrupt, update, getSnapshot };
+}
+
+export function createSupportSystem() {
+  let charges, cooldown;
+  function reset() { charges = 3; cooldown = 0; }
+  function request() {
+    if (charges <= 0 || cooldown > 0) return false;
+    charges -= 1;
+    cooldown = 25;
+    return true;
+  }
+  function update(dt) {
+    if (!Number.isFinite(dt) || dt <= 0) return;
+    cooldown = Math.max(0, cooldown - dt);
+    if (cooldown < 1e-8) cooldown = 0;
+  }
+  const getSnapshot = () => ({ charges, cooldown });
+  reset();
+  return { reset, request, update, getSnapshot };
+}

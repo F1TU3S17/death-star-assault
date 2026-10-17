@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { createXWingSfoilRig } from './sfoils.js';
 
 const silver = new THREE.MeshStandardMaterial({ color: 0xa3a9b0, roughness: 0.82, metalness: 0.35 });
 const dark = new THREE.MeshStandardMaterial({ color: 0x242c38, roughness: 0.72, metalness: 0.65 });
@@ -31,6 +32,7 @@ function radialGlowTexture() {
 function addEngineLights(root, kind) {
   if (kind === 'tie' || kind === 'vader') return;
   root.userData.engineMaterials = [];
+  root.userData.engineNodes = [];
   root.userData.engineBoost = 0;
   engineRoots.add(root);
   const points = kind === 'ywing'
@@ -80,10 +82,12 @@ function addEngineLights(root, kind) {
     plume.position.set(point[0], point[1], point[2] + 3.75);
     if (kind === 'ywing') plume.scale.set(1.5, 1.15, 1.5);
     root.add(plume);
+    root.userData.engineNodes.push({ node: plume, side: Math.sign(point[0]), upper: Math.sign(point[1]) });
     root.userData.engineMaterials.push(plasma);
     const core = new THREE.Mesh(new THREE.CircleGeometry(kind === 'ywing' ? 0.58 : 0.34, 24), new THREE.MeshBasicMaterial({ color: 0xffdcf4, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false, toneMapped: false, fog: false }));
     core.position.set(...point);
     root.add(core);
+    root.userData.engineNodes.push({ node: core, side: Math.sign(point[0]), upper: Math.sign(point[1]) });
   }
 }
 
@@ -163,6 +167,7 @@ function fallbackShip(kind) {
       for (const up of [-1, 1]) {
         const wing = new THREE.Group();
         wing.rotation.z = sign * up * 0.22;
+        wing.userData.sfoil = { side: sign, upper: up };
         box(wing, silver, sign * 5, up * 0.5, 1, 9, 0.35, 2.8);
         box(wing, red, sign * 6, up * 0.72, 0.5, 3, 0.07, 1.3);
         cylinder(wing, silver, 0.65, 6, sign * 2.3, up * 0.4, 1.5);
@@ -191,6 +196,34 @@ export function createShip(kind = 'xwing', modelUrl, modelOptions = {}) {
   root.add(fallback);
   root.userData.kind = kind;
   addEngineLights(root, kind);
+  let sfoilRig = null;
+  if (kind === 'xwing') {
+    const fallbackWings = fallback.children.filter(child => child.userData.sfoil);
+    const effectsHinges = new Map();
+    for (const side of [-1, 1]) for (const upper of [-1, 1]) {
+      const hinge = new THREE.Group();
+      hinge.position.set(side * 1.2, upper * 0.8, 0);
+      root.add(hinge);
+      effectsHinges.set(`${side}:${upper}`, hinge);
+    }
+    // Nozzles and plasma belong to the same moving assembly as their engines.
+    for (const { node, side, upper } of root.userData.engineNodes) {
+      const hinge = effectsHinges.get(`${side}:${upper}`);
+      node.position.sub(hinge.position);
+      hinge.add(node);
+    }
+    root.userData.sfoils = { openness: 1, loadedRig: false, wingCount: 4, sourceMeshes: 0, movingTriangles: 0, stationaryTriangles: 0 };
+    root.userData.setSfoils = (value) => {
+      const openness = THREE.MathUtils.clamp(Number(value) || 0, 0, 1);
+      root.userData.sfoils.openness = openness;
+      for (const wing of fallbackWings) wing.rotation.z = wing.userData.sfoil.side * wing.userData.sfoil.upper * 0.22 * openness;
+      for (const [key, hinge] of effectsHinges) {
+        const [side, upper] = key.split(':').map(Number);
+        hinge.rotation.z = (openness - 1) * side * upper * 0.255;
+      }
+      sfoilRig?.set(openness);
+    };
+  }
   root.userData.modelStatus = modelUrl ? 'loading' : 'fallback';
   if (modelUrl) {
     loadModel(modelUrl).then(template => {
@@ -207,6 +240,13 @@ export function createShip(kind = 'xwing', modelUrl, modelOptions = {}) {
       pivot.add(asset);
       pivot.scale.setScalar(factor);
       root.add(pivot);
+      if (kind === 'xwing') {
+        sfoilRig = createXWingSfoilRig(root, pivot);
+        root.add(sfoilRig.group);
+        root.remove(pivot);
+        Object.assign(root.userData.sfoils, sfoilRig.counts, { loadedRig: true });
+        root.userData.setSfoils(root.userData.sfoils.openness);
+      }
       fallback.visible = false;
       root.userData.modelStatus = 'loaded';
       root.userData.modelUrl = modelUrl;

@@ -54,6 +54,15 @@ These two images are project-created, not downloaded third-party assets.
 
 ## Asset Validation
 
+`public/portraits/radio-atlas.png` — единый атлас 3×2 оригинальных портретов,
+созданный встроенным ImageGen 17 октября 2026 года. Референсы костюмов:
+[General Dodonna](https://www.starwars.com/databank/Jan-Dodonna) и
+[Garven Dreis](https://www.starwars.com/databank/garven-dreis), StarWars.com.
+Кадры-референсы не включены в игровые ресурсы. Итоговый prompt: “3×2 equal
+square cinematic painted portraits on navy: Dodonna, Red Leader, Gold Leader,
+Luke, Wedge, Gold Two; centered faces, period Rebel helmets and orange suits;
+matching teal rimlight; no text, borders or gaps.”
+
 Offline validation passed: both glTF dependency trees are complete, buffer
 byte lengths match declarations, and both GLB headers/chunk lengths are valid.
 The Y-wing conversion reruns successfully and produces the same SHA-256 hash.
