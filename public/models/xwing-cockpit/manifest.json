@@ -1,0 +1,35 @@
+{
+  "author": "MichaelEGA / Open Galaxy",
+  "source": "https://github.com/MichaelEGA/Open-Galaxy/tree/main/Assets/Data/objects/cockpit/xwing",
+  "permissionSource": "https://www.moddb.com/games/open-galaxy/addons/xwing-cockpit",
+  "downloaded": "2026-10-17",
+  "sourceObjGitBlob": "06e183c3c2ed12465c7db23febdb997a234205ba",
+  "files": [
+    {
+      "file": "cockpit.png",
+      "bytes": 10179446,
+      "sha256": "4964eaef6764433e938762da44f4e42ad0f9108d0ad6b532d796cd7cc117e4c5"
+    },
+    {
+      "file": "cockpit_light.png",
+      "bytes": 227186,
+      "sha256": "ff2ff641c13bf0b07f8f5c5d7b76d27257870e21485bcba9329b01f4bac98054"
+    },
+    {
+      "file": "LICENSE.txt",
+      "bytes": 865,
+      "sha256": "c84f881075880330771a87b15a6685734bf8b6d7de76033fcb48f5fb2959f44e"
+    },
+    {
+      "file": "scene.bin",
+      "bytes": 6206496,
+      "sha256": "08986b74f979117ee224d960f65e836ce26c046eaac572a81ad8829e875b75de"
+    },
+    {
+      "file": "scene.gltf",
+      "bytes": 4786,
+      "sha256": "be1a4df9cccbda5d0b5b61948fc4f21dbf9571a573fbbb49b89617cc3e78c67a"
+    }
+  ],
+  "conversion": "Loose OBJ lines removed, UV V flipped to preserve TextureLoader sampling with local glTF images"
+}

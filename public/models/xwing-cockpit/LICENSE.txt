@@ -1,0 +1,17 @@
+X-Wing Cockpit by MichaelEGA / Open Galaxy
+Downloaded 17 October 2026 from creator's repository:
+https://github.com/MichaelEGA/Open-Galaxy/tree/main/Assets/Data/objects/cockpit/xwing
+
+Asset-specific permission:
+https://www.moddb.com/games/open-galaxy/addons/xwing-cockpit
+Published 24 October 2025 by MichaelEGA.
+"Free to use, just credit the Open Galaxy project."
+The same page includes the original Blender file "if you want to modify".
+
+ModDB labels the asset Creative Commons but does not specify a variant;
+therefore this project relies on the explicit author permission above,
+and does NOT claim that the asset is CC0 or CC BY 4.0.
+
+Required attribution: X-Wing cockpit by MichaelEGA / Open Galaxy.
+Modifications: see scene.gltf asset.extras and repository scripts/convert-cockpit.mjs.
+Franchise intellectual property is not granted by this asset permission.

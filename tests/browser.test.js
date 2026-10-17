@@ -89,10 +89,17 @@ test('browser renders downloaded models and supports controls, QTE, defeat/repla
       await page.evaluate(() => document.fonts.ready.then(() => true));
       const frame = await page.evaluate(() => window.__gameDebug.inspect());
       assert.ok(frame.graphics.enabled && frame.graphics.hdr && frame.graphics.bloom && frame.graphics.antialias === 'FXAA');
+      assert.equal(frame.lighting.enabled, true);
+      assert.equal(frame.lighting.environment, 'procedural-pmrem');
       assert.ok(frame.renderStats.calls > 0 && frame.renderStats.triangles > 0);
       assert.ok(Object.values(frame.renderStats).every(value => Number.isFinite(value) && value >= 0));
       for (const values of [frame.playerPosition, frame.playerQuaternion, frame.cameraPosition, frame.cameraQuaternion, ...frame.enemies.map(enemy => enemy.position)]) assert.ok(values.every(Number.isFinite));
-      if (['gameplay', 'trench', 'cockpit', 'hud-mobile'].includes(name)) frameMetrics[name] = { calls: frame.renderStats.calls, triangles: frame.renderStats.triangles, points: frame.renderStats.points, width: frame.graphics.width, height: frame.graphics.height };
+      if (name === 'trench') {
+        assert.equal(frame.worldGraphics.trench.multiscale, true);
+        assert.equal(frame.worldGraphics.trench.batches, 10);
+        assert.ok(frame.worldGraphics.trench.instances > 0);
+      }
+      if (['gameplay', 'trench', 'cockpit', 'xwing-cockpit', 'hud-mobile'].includes(name)) frameMetrics[name] = { calls: frame.renderStats.calls, triangles: frame.renderStats.triangles, points: frame.renderStats.points, width: frame.graphics.width, height: frame.graphics.height };
       return page.screenshot({ path: resolve(output, `${name}.png`), fullPage: true });
     };
     const reachPhase = async phase => {
@@ -266,6 +273,17 @@ test('browser renders downloaded models and supports controls, QTE, defeat/repla
     await page.waitForFunction(() => window.__gameDebug.inspect().sfoilsRig?.loadedRig);
     await page.locator('#start').click();
     if (!await page.locator('#tactics').evaluate(element => element.open)) await page.locator('#tactics summary').click();
+    await page.waitForFunction(() => window.__gameDebug.inspect().cockpitModel === 'loaded');
+    const cockpitDetails = await page.evaluate(() => window.__gameDebug.inspect().cockpitDetails);
+    assert.equal(cockpitDetails.shipId, 'xwing');
+    assert.ok(cockpitDetails.triangles >= 60000, `Detailed X-wing cockpit should contain about 64k triangles, got ${cockpitDetails.triangles}`);
+    assert.equal(cockpitDetails.error, null);
+    await page.keyboard.press('c');
+    assert.equal(await page.evaluate(() => window.__gameDebug.snapshot().camera), 'cockpit');
+    await page.waitForTimeout(100);
+    await screenshot('xwing-cockpit');
+    await page.keyboard.press('c');
+    assert.equal(await page.evaluate(() => window.__gameDebug.snapshot().camera), 'chase');
     assert.equal(await page.locator('#repair').isDisabled(), true, 'Full hull must not consume a repair charge');
     // A damage fixture exercises the actual repair button and damage interruption UI.
     await page.evaluate(() => window.__gameDebug.damage(125));

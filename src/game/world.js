@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { createXWingSfoilRig } from './sfoils.js';
-import { addTrenchDetail, panelNormalTexture } from './world-detail.js';
+import { addTrenchDetail, panelNormalTexture, makeStationSurfaceTexture } from './world-detail.js';
+import { createDetailedCockpit } from './detailed-cockpit.js';
 
 const silver = new THREE.MeshStandardMaterial({ color: 0xa3a9b0, roughness: 0.82, metalness: 0.35 });
 const dark = new THREE.MeshStandardMaterial({ color: 0x242c38, roughness: 0.72, metalness: 0.65 });
@@ -249,9 +250,10 @@ export function createShip(kind = 'xwing', modelUrl, modelOptions = {}) {
         const tune = (original) => {
           if (tunedMaterials.has(original)) return tunedMaterials.get(original);
           const material = original.clone();
-          if (material.color) material.color.multiplyScalar(kind === 'tie' ? 0.93 : 0.85);
-          if ('roughness' in material) material.roughness = Math.max(0.72, material.roughness * 0.86);
-          if ('metalness' in material) material.metalness = Math.min(0.48, material.metalness);
+          if (material.color) material.color.multiplyScalar(kind === 'tie' ? 0.96 : 0.98);
+          if ('roughness' in material) material.roughness = material.roughnessMap ? 0.82 : kind === 'tie' ? 0.54 : 0.64;
+          if ('metalness' in material) material.metalness = material.metalnessMap ? 0.75 : Math.min(0.4, material.metalness);
+          material.envMapIntensity = kind === 'tie' ? 0.65 : 0.85;
           if ('emissiveIntensity' in material) material.emissiveIntensity = Math.min(0.18, material.emissiveIntensity);
           tunedMaterials.set(original, material);
           return material;
@@ -259,6 +261,7 @@ export function createShip(kind = 'xwing', modelUrl, modelOptions = {}) {
         object.material = Array.isArray(object.material) ? object.material.map(tune) : tune(object.material);
       });
       if (modelOptions.rotation) asset.rotation.set(...modelOptions.rotation);
+      else if (kind === 'tie' && modelUrl.includes('/tie-fighter-detailed/')) asset.rotation.y = Math.PI;
       asset.updateMatrixWorld(true);
       const bounds = new THREE.Box3().setFromObject(asset);
       const size = bounds.getSize(new THREE.Vector3());
@@ -286,45 +289,6 @@ export function createShip(kind = 'xwing', modelUrl, modelOptions = {}) {
     });
   }
   return root;
-}
-
-function makeSurfaceTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 4096;
-  canvas.height = 2048;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#4d5862';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  let seed = 42;
-  const random = () => { seed = (1664525 * seed + 1013904223) >>> 0; return seed / 4294967296; };
-  for (let y = 0; y < canvas.height; y += 32) {
-    let x = -Math.floor(random() * 50);
-    while (x < canvas.width) {
-      const width = 22 + Math.floor(random() * 70);
-      const value = 69 + Math.floor(random() * 22);
-      ctx.fillStyle = '#252e37';
-      ctx.fillRect(x, y, width, 32);
-      ctx.fillStyle = `rgb(${value},${value + 7},${value + 13})`;
-      ctx.fillRect(x + 1, y + 1, width - 2, 29);
-      ctx.fillStyle = '#8a939b';
-      ctx.fillRect(x + 2, y + 2, width - 5, 1);
-      for (let detail = 0; detail < 12; detail++) {
-        const dx = x + 3 + random() * Math.max(1, width - 9);
-        const dy = y + 4 + random() * 22;
-        ctx.fillStyle = detail % 4 === 0 ? '#29333d' : detail % 3 === 0 ? '#7b8790' : '#596670';
-        ctx.fillRect(dx, dy, 1 + random() * Math.min(11, width / 3), 1 + random() * 3);
-      }
-      x += width;
-    }
-  }
-  ctx.fillStyle = '#28323d';
-  for (let y = 0; y < canvas.height; y += 128) ctx.fillRect(0, y, canvas.width, 3);
-  ctx.fillStyle = '#101b27';
-  ctx.fillRect(0, 1018, canvas.width, 12);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 8;
-  return texture;
 }
 
 export function createWorld(scene) {
@@ -355,7 +319,7 @@ export function createWorld(scene) {
   const starfield = new THREE.Points(starsGeometry, new THREE.PointsMaterial({ color: 0xd0ddf5, size: 1.3, sizeAttenuation: false, fog: false, toneMapped: false }));
   scene.add(starfield);
 
-  const stationTexture = makeSurfaceTexture();
+  const stationTexture = makeStationSurfaceTexture();
   const stationMaterial = new THREE.MeshStandardMaterial({ color: 0x9eaab3, map: stationTexture, bumpMap: stationTexture, bumpScale: 1.5, roughness: 0.91, metalness: 0.28 });
   function deathStar(radius) {
     const group = new THREE.Group();
@@ -384,16 +348,16 @@ export function createWorld(scene) {
     bowl.rotation.x = Math.PI / 2;
     // Lathe's Y axis becomes local +Z, with the centre sunk into the hull.
     dish.add(bowl);
-    const ribMaterial = new THREE.MeshStandardMaterial({ color: 0x7c8791, roughness: 0.83, metalness: 0.34 });
-    for (let i = 1; i <= 6; i++) {
-      const r = dishRadius * i / 6;
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(r, radius * (i === 6 ? 0.0017 : 0.00065), 5, 96), ribMaterial);
+    const ribMaterial = new THREE.MeshStandardMaterial({ color: 0x505b64, roughness: 0.7, metalness: 0.34 });
+    for (let i = 1; i <= 3; i++) {
+      const r = dishRadius * i / 3;
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(r, radius * (i === 3 ? 0.0011 : 0.0004), 5, 96), ribMaterial);
       ring.position.z = dishZ(r) + radius * 0.0007;
       dish.add(ring);
     }
     const spokes = [];
-    for (let i = 0; i < 24; i++) {
-      const angle = i / 24 * Math.PI * 2;
+    for (let i = 0; i < 12; i++) {
+      const angle = i / 12 * Math.PI * 2;
       for (let step = 0; step < 10; step++) {
         for (const s of [step, step + 1]) {
           const r = dishRadius * (0.13 + s / 10 * 0.87);
@@ -403,7 +367,7 @@ export function createWorld(scene) {
     }
     const spokeGeometry = new THREE.BufferGeometry();
     spokeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(spokes, 3));
-    dish.add(new THREE.LineSegments(spokeGeometry, new THREE.LineBasicMaterial({ color: 0x8a959e })));
+    dish.add(new THREE.LineSegments(spokeGeometry, new THREE.LineBasicMaterial({ color: 0x505c66 })));
     const focus = new THREE.Mesh(new THREE.CircleGeometry(radius * 0.024, 32), new THREE.MeshStandardMaterial({ color: 0x28313a, roughness: 1 }));
     focus.position.z = dishZ(0) + radius * 0.0007;
     dish.add(focus);
@@ -560,8 +524,8 @@ export function createWorld(scene) {
   const distantShips = [
     createShip('xwing', '/models/x-wing/scene.gltf', { rotation: [0, Math.PI, 0] }),
     createShip('ywing', '/models/y-wing/scene.gltf'),
-    createShip('tie', '/models/tie-fighter.glb'),
-    createShip('tie', '/models/tie-fighter.glb'),
+    createShip('tie', '/models/tie-fighter-detailed/scene.gltf'),
+    createShip('tie', '/models/tie-fighter-detailed/scene.gltf'),
   ];
   distantShips.forEach(ship => distantBattle.add(ship));
   const distantBoltGeometry = new THREE.CylinderGeometry(0.7, 0.7, 20, 5);
@@ -632,7 +596,7 @@ export function createWorld(scene) {
   const qtePursuit = new THREE.Group();
   cinematic.add(qtePursuit);
   const pursuitFighters = [-1, 1].map(side => {
-    const fighter = createShip('tie', '/models/tie-fighter.glb');
+    const fighter = createShip('tie', '/models/tie-fighter-detailed/scene.gltf');
     fighter.userData.side = side;
     qtePursuit.add(fighter);
     return fighter;
@@ -1066,5 +1030,5 @@ export function createCockpit() {
     for (let i = 0; i < 5; i++) box(group, new THREE.MeshBasicMaterial({ color: i % 2 ? 0xdcaa59 : 0x82c0d1 }), side * (0.8 + i * 0.12), -0.36, -1.15, 0.055, 0.025, 0.1);
   }
   box(group, cockpitMat, 0, 1.65, -1.15, 3, 0.1, 0.12);
-  return group;
+  return createDetailedCockpit(group);
 }

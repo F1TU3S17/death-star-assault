@@ -3,8 +3,9 @@
   "provenance": {
     "x-wing": "perceval-66, CC BY 4.0; see x-wing/license.txt",
     "y-wing": "First Strike Development Team, custom noncommercial attribution permission; see y-wing/LICENSE.txt",
-    "tie-fighter": "Alberto Calvo, CC BY 3.0; https://poly.pizza/m/aba7TBlKyJE",
-    "death-star": "Joe Scalise, CC BY 3.0; https://poly.pizza/m/8MIVor30XoN"
+    "tie-fighter": "Alberto Calvo, CC BY 3.0; https://poly.pizza/m/aba7TBlKyJE; comparison reference only, not rendered",
+    "death-star": "Joe Scalise, CC BY 3.0; https://poly.pizza/m/8MIVor30XoN",
+    "tie-fighter-detailed": "Jeroenimo, non-monetary creator permission with credit; see models/tie-fighter-detailed/LICENSE.txt"
   },
   "files": [
     {
@@ -20,12 +21,14 @@
     {
       "file": "models/tie-fighter.glb",
       "bytes": 120100,
-      "sha256": "bb3a322365e3b89361a001a0867233f1c0b8e25b4289d038a33f57677da90e1c"
+      "sha256": "bb3a322365e3b89361a001a0867233f1c0b8e25b4289d038a33f57677da90e1c",
+      "role": "comparison reference only; not rendered"
     },
     {
       "file": "models/tie-fighter.LICENSE.txt",
       "bytes": 256,
-      "sha256": "494dec060d4fc5a8630d2a9bfdedae330e6d97045fa9dca9e4ba0a6806de870a"
+      "sha256": "494dec060d4fc5a8630d2a9bfdedae330e6d97045fa9dca9e4ba0a6806de870a",
+      "role": "comparison reference only; not rendered"
     },
     {
       "file": "models/x-wing/license.txt",
@@ -176,6 +179,32 @@
       "file": "models/y-wing/y-wing_c.png",
       "bytes": 1606178,
       "sha256": "593a3890d3e2fa18c8f314f76d763568b43c4868b90481c8e69bcfc25a2c7f1c"
+    },
+    {
+      "file": "models/tie-fighter-detailed/scene.gltf",
+      "bytes": 6596,
+      "sha256": "b1d4e26e55131ff225e92e506cbcc4d71073ba8f0ba4cca39430fd87f934f1b0"
+    },
+    {
+      "file": "models/tie-fighter-detailed/scene.bin",
+      "bytes": 117624,
+      "sha256": "b3134b9be60c3313164d4cc0c80e73257182ddb3cf3588db3cae5407b3446b3e"
+    },
+    {
+      "file": "models/tie-fighter-detailed/Empire_TIE_Fighter.png",
+      "bytes": 300304,
+      "sha256": "0902359b3ad0d33d328304c9457ef48cfb531edd4b607303ee5a1f3134559f86"
+    },
+    {
+      "file": "models/tie-fighter-detailed/Empire_TIE_Fighter_B.png",
+      "bytes": 22461,
+      "sha256": "01e2c12082f25ce78f50411a19bbcbca9b146e2acb881a583f5ddbf671eed98e"
+    },
+    {
+      "file": "models/tie-fighter-detailed/LICENSE.txt",
+      "bytes": 547,
+      "sha256": "0102fba60337f133d1ed203f26d9d4b3e3b8d19e5e26e68eb649d53661b17aad"
     }
-  ]
+  ],
+  "updated": "2026-10-17"
 }

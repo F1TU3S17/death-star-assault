@@ -5,6 +5,7 @@ import { SHIPS } from './data.js';
 import { createWorld, createShip, createTurret, createCockpit } from './world.js';
 import { createAudio } from './audio.js';
 import { createRenderPipeline } from './render-pipeline.js';
+import { createSceneLighting } from './scene-lighting.js';
 import { absorbDamage, segmentSphereHit, clampFrameDelta, createArmament, insideLockCone, steerDirection, splashDamage, getPowerProfile, createRepairSystem, createSupportSystem } from './simulation.js';
 
 const FORWARD = new THREE.Vector3(0, 0, -1);
@@ -14,7 +15,7 @@ const AXIS_Z = new THREE.Vector3(0, 0, 1);
 const DEFAULT_MODELS = {
   xwing: '/models/x-wing/scene.gltf',
   ywing: '/models/y-wing/scene.gltf',
-  tie: '/models/tie-fighter.glb',
+  tie: '/models/tie-fighter-detailed/scene.gltf',
 };
 
 function createPulseMaterial(color, ion = false, opacity = 0.95) {
@@ -24,6 +25,19 @@ function createPulseMaterial(color, ion = false, opacity = 0.95) {
     vertexShader: `varying vec2 vUv; varying vec3 vNormal; void main(){vUv=uv; vNormal=normalize(normalMatrix*normal); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
     fragmentShader: `uniform float time; uniform vec3 tint; uniform float ion; uniform float alpha; varying vec2 vUv; varying vec3 vNormal; void main(){float facing=abs(normalize(vNormal).z); float core=pow(facing,5.0); float pulse=0.87+0.13*sin(vUv.y*(10.0+ion*40.0)-time*(65.0+ion*20.0)); vec3 color=mix(tint*1.6,vec3(2.0),core*0.82); gl_FragColor=vec4(color,alpha*pulse*(0.3+facing*0.7));}`,
   });
+}
+
+function createBurstTexture() {
+  const pixels = new Uint8Array(64 * 64 * 4);
+  for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
+    const radius = Math.hypot((x - 31.5) / 31.5, (y - 31.5) / 31.5);
+    const offset = (y * 64 + x) * 4;
+    pixels[offset] = pixels[offset + 1] = pixels[offset + 2] = 255;
+    pixels[offset + 3] = Math.round(Math.max(0, 1 - radius) ** 2.4 * 255);
+  }
+  const texture = new THREE.DataTexture(pixels, 64, 64);
+  texture.needsUpdate = true;
+  return texture;
 }
 
 /** Engine owns all simulation. UI receives plain snapshots and narrative events. */
@@ -57,6 +71,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   scene.add(rimLight);
   const world = createWorld(scene);
   const renderPipeline = createRenderPipeline(renderer, scene, camera);
+  const sceneLighting = createSceneLighting(renderer, scene, camera);
   const audio = createAudio();
   const campaign = createCampaign('episode4');
   const shipDefinitions = Array.isArray(ships) ? Object.fromEntries(ships.map(ship => [ship.id, ship])) : ships;
@@ -84,8 +99,10 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   const torpedoTailGeometry = new THREE.ConeGeometry(0.65, 12, 8);
   torpedoTailGeometry.rotateX(Math.PI / 2);
   const torpedoGlowMaterial = new THREE.MeshBasicMaterial({ color: 0xb1e6ff, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.85, toneMapped: false, depthWrite: false, fog: false });
-  const effectGeometry = new THREE.SphereGeometry(1, 8, 6);
-  const effectMaterials = [0xffc976, 0xff6e42, 0xffe6c2, 0x82d2ff].map(color => new THREE.MeshBasicMaterial({ color, transparent: true }));
+  const effectGeometry = new THREE.BoxGeometry(0.45, 0.24, 0.8);
+  const effectTexture = createBurstTexture();
+  const effectMaterials = [0xffb96a, 0xff5d28, 0xffe6c2, 0x82d2ff].map(color => new THREE.SpriteMaterial({ map: effectTexture, color: new THREE.Color(color).multiplyScalar(2.4), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false }));
+  const debrisMaterial = new THREE.MeshStandardMaterial({ color: 0x34363b, roughness: 0.58, metalness: 0.6, transparent: true });
 
   let disposed = false;
   let frameId;
@@ -150,6 +167,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     const modelOptions = stats.modelOptions || (selectedShipId === 'xwing' ? { rotation: [0, Math.PI, 0] } : {});
     shipMesh = createShip(stats.model || selectedShipId, modelFor(selectedShipId), modelOptions);
     player.add(shipMesh);
+    cockpit.userData.setShip?.(selectedShipId);
     if (!keepResources) { hull = stats.hull; shields = stats.shield; }
     else { hull = Math.min(hull, stats.hull); shields = Math.min(shields, stats.shield); }
     shipMesh.visible = cameraMode !== 'cockpit';
@@ -404,11 +422,14 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
 
   function burst(position, colorIndex = 0, size = 1) {
     for (let i = 0; i < 13; i++) {
-      const mesh = new THREE.Mesh(effectGeometry, effectMaterials[(colorIndex + i % 3) % effectMaterials.length].clone());
+      const debris = i > 9 && colorIndex !== 3;
+      const mesh = debris ? new THREE.Mesh(effectGeometry, debrisMaterial.clone()) : new THREE.Sprite(effectMaterials[(colorIndex + i % 3) % effectMaterials.length].clone());
       mesh.position.copy(position);
-      mesh.scale.setScalar(size * (1 + Math.random() * 2));
+      mesh.scale.setScalar(size * (1 + Math.random() * 2) * (debris ? 0.5 : 3));
       scene.add(mesh);
-      effects.push({ mesh, velocity: new THREE.Vector3((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 60, (Math.random() - 0.5) * 60), life: 0.6 + Math.random() * 0.6, maxLife: 1.2 });
+      const velocity = new THREE.Vector3((Math.random() - 0.5) * 60, (Math.random() - 0.5) * 60, (Math.random() - 0.5) * 60);
+      const life = 0.3 + Math.random() * 0.45;
+      effects.push({ mesh, velocity, life, maxLife: life, debris });
     }
   }
 
@@ -822,8 +843,10 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       const effect = effects[i];
       effect.life -= dt;
       effect.mesh.position.addScaledVector(effect.velocity, dt);
-      effect.mesh.material.opacity = Math.max(0, effect.life / effect.maxLife);
-      effect.mesh.scale.multiplyScalar(1 + dt * 1.2);
+      const cameraFade = THREE.MathUtils.smoothstep(effect.mesh.position.distanceTo(camera.position), 3, 11);
+      effect.mesh.material.opacity = Math.max(0, effect.life / effect.maxLife) * cameraFade;
+      effect.mesh.scale.multiplyScalar(1 + dt * (effect.debris ? 0 : 1.2));
+      if (effect.debris) { effect.mesh.rotation.x += dt * 5; effect.mesh.rotation.z += dt * 3; }
       if (effect.life <= 0) {
         scene.remove(effect.mesh);
         effect.mesh.material.dispose();
@@ -833,11 +856,14 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   }
 
   function updateCamera(dt) {
+    const boostLens = mode === 'playing' && (keys.has('ShiftLeft') || keys.has('ShiftRight'));
+    const lens = THREE.MathUtils.damp(camera.fov, boostLens ? 70 : 63, 3.5, dt);
+    if (Math.abs(lens - camera.fov) > 0.005) { camera.fov = lens; camera.updateProjectionMatrix(); }
     if (mode === 'menu') {
       player.position.set(0, 60 + Math.sin(backdropElapsed * 0.25) * 2, 600);
       player.rotation.set(0.04, Math.sin(backdropElapsed * 0.13) * 0.06, -0.08);
-      camera.position.set(22 + Math.sin(backdropElapsed * 0.08) * 4, 70, 644);
-      camera.lookAt(window.innerWidth <= 760 ? 0 : -45, 61, 575);
+      camera.position.set(16 + Math.sin(backdropElapsed * 0.08) * 3, 68, window.innerWidth <= 760 ? 645 : 633);
+      camera.lookAt(window.innerWidth <= 760 ? 0 : -20, 61, 589);
       cockpit.visible = false;
       shipMesh.visible = true;
       return;
@@ -863,10 +889,11 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       cockpit.visible = true;
       shipMesh.visible = false;
     } else {
-      const desired = player.position.clone().addScaledVector(forward, -29).addScaledVector(up, 8.5);
+      const chaseDistance = camera.aspect < 1 ? 24 / camera.aspect : 24;
+      const desired = player.position.clone().addScaledVector(forward, -chaseDistance).addScaledVector(up, 6.5);
       camera.position.lerp(desired, 1 - Math.exp(-dt * 8));
       camera.up.copy(up);
-      camera.lookAt(player.position.clone().addScaledVector(forward, 80));
+      camera.lookAt(player.position.clone().addScaledVector(forward, 65));
       cockpit.visible = false;
       shipMesh.visible = true;
     }
@@ -930,6 +957,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   function drawFrame() {
     keyLight.position.copy(player.position).add(temporary.set(-800, 1100, 500));
     keyLight.target.position.copy(player.position);
+    sceneLighting.update(player, campaign.getSnapshot().phase, mode);
     renderPipeline.render();
   }
 
@@ -1172,10 +1200,11 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       boltGeometry.dispose();
       torpedoGeometry.dispose(); torpedoTailGeometry.dispose(); torpedoMaterial.dispose(); torpedoGlowMaterial.dispose();
       effectGeometry.dispose();
+      effectTexture.dispose(); debrisMaterial.dispose();
       playerBoltMaterial.dispose(); enemyBoltMaterial.dispose(); ionBoltMaterial.dispose();
       boltHalos.forEach(material => material.dispose());
       effectMaterials.forEach(material => material.dispose());
-      renderPipeline.dispose(); renderer.dispose(); audio.dispose();
+      sceneLighting.dispose(); renderPipeline.dispose(); renderer.dispose(); audio.dispose();
       if (window.__gameDebug?.game === api) delete window.__gameDebug;
     },
   };
@@ -1198,7 +1227,8 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       playerModel: shipMesh.userData.modelStatus, playerModelUrl: shipMesh.userData.modelUrl,
       camera: cameraMode, renderCalls: renderer.info.render.calls,
       renderStats: { ...renderer.info.render },
-      graphics: renderPipeline.inspect(), worldGraphics: world.graphics || null,
+      graphics: renderPipeline.inspect(), worldGraphics: world.graphics || null, lighting: sceneLighting.inspect(), cockpitModel: cockpit.userData.modelStatus || 'fallback',
+      cockpitDetails: { triangles: cockpit.userData.triangleCount || 0, shipId: cockpit.userData.shipId || selectedShipId, error: cockpit.userData.error || null },
     }),
     advanceMission() {
       const state = campaign.getSnapshot();

@@ -11,12 +11,17 @@ const publicRoot = fileURLToPath(new URL('../public/', import.meta.url));
 
 test('downloaded assets match recorded hashes and include real glTF geometry', async () => {
   const manifest = JSON.parse(await readFile(resolve(publicRoot, 'models/manifest.json'), 'utf8'));
-  for (const file of manifest.files) {
-    const bytes = await readFile(resolve(publicRoot, file.file));
+  const manifests = [[publicRoot, manifest]];
+  for (const folder of ['xwing-cockpit', 'tie-fighter-detailed']) {
+    const root = resolve(publicRoot, 'models', folder);
+    manifests.push([root, JSON.parse(await readFile(resolve(root, 'manifest.json'), 'utf8'))]);
+  }
+  for (const [root, recorded] of manifests) for (const file of recorded.files) {
+    const bytes = await readFile(resolve(root, file.file));
     assert.equal(bytes.length, file.bytes, file.file);
     assert.equal(createHash('sha256').update(bytes).digest('hex'), file.sha256, file.file);
   }
-  for (const relative of ['models/x-wing/scene.gltf', 'models/y-wing/scene.gltf', 'models/tie-fighter.glb', 'models/death-star.glb']) {
+  for (const relative of ['models/x-wing/scene.gltf', 'models/y-wing/scene.gltf', 'models/tie-fighter.glb', 'models/death-star.glb', 'models/xwing-cockpit/scene.gltf', 'models/tie-fighter-detailed/scene.gltf']) {
     const path = resolve(publicRoot, relative);
     const bytes = await readFile(path);
     let input;

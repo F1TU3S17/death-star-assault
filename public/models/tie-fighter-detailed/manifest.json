@@ -1,0 +1,63 @@
+{
+  "author": "Jeroenimo (The Dutchman)",
+  "source": "https://www.moddb.com/mods/empire-at-war-re/addons/tie-series-freerelease",
+  "mirror": "https://github.com/MichaelEGA/Open-Galaxy/tree/main/Assets/Data/objects/ships/Jeroenimo/Tie%20Fighters",
+  "downloaded": "2026-10-17",
+  "permission": "Creator permits non-monetary reuse with proper credit; the ModDB page labels the release Proprietary, not Creative Commons. See LICENSE.txt.",
+  "sourceArchive": {
+    "file": "TIEs.rar",
+    "bytes": 3032268,
+    "md5ReportedByModDB": "eeb62e52315e541c93c42dabf140ebc0",
+    "note": "The original archive download endpoint reset during research; the source FBX and textures were retrieved from the Open Galaxy repository mirror and were not compared byte-for-byte with the archive."
+  },
+  "sourceFbx": {
+    "file": "Empire_TIE_Fighter.fbx",
+    "sha256": "3b383cb1405df5207ba4132f72c78e6325f45b511d5796ba119ec11c5a6969f5",
+    "unityImporterGlobalScale": 35
+  },
+  "orientation": {
+    "sourceForward": "+Z",
+    "runtimeRotationY": "PI",
+    "evidence": "The Open Galaxy imp_tie_fighter prefab places gun banks at positive Z and engine effects at negative Z."
+  },
+  "runtime": {
+    "triangles": 1412,
+    "hullTriangles": 1394,
+    "engineTriangles": 18,
+    "textures": "512x512 diffuse and tangent-space normal; original maps retained",
+    "removed": "Baked 5,525-triangle Shadow mesh",
+    "material": "Hull roughness 0.5 / metalness 0; engines roughness 0.72 / metalness 0."
+  },
+  "conversion": {
+    "script": "scripts/convert-tie.mjs",
+    "usage": "node scripts/convert-tie.mjs <original-fbx-path> [output-directory]",
+    "details": "Static bind-pose geometry; FBX texture V orientation compensated for glTF; normal map green channel preserved; UV tangent basis generated."
+  },
+  "files": [
+    {
+      "file": "scene.gltf",
+      "bytes": 6596,
+      "sha256": "b1d4e26e55131ff225e92e506cbcc4d71073ba8f0ba4cca39430fd87f934f1b0"
+    },
+    {
+      "file": "scene.bin",
+      "bytes": 117624,
+      "sha256": "b3134b9be60c3313164d4cc0c80e73257182ddb3cf3588db3cae5407b3446b3e"
+    },
+    {
+      "file": "Empire_TIE_Fighter.png",
+      "bytes": 300304,
+      "sha256": "0902359b3ad0d33d328304c9457ef48cfb531edd4b607303ee5a1f3134559f86"
+    },
+    {
+      "file": "Empire_TIE_Fighter_B.png",
+      "bytes": 22461,
+      "sha256": "01e2c12082f25ce78f50411a19bbcbca9b146e2acb881a583f5ddbf671eed98e"
+    },
+    {
+      "file": "LICENSE.txt",
+      "bytes": 547,
+      "sha256": "0102fba60337f133d1ed203f26d9d4b3e3b8d19e5e26e68eb649d53661b17aad"
+    }
+  ]
+}

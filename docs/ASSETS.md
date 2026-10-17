@@ -1,13 +1,15 @@
 # Asset Sources and Integration
 
 All gameplay ship models are downloaded assets stored locally. The game does
-not contact the model providers at runtime. Download date: **16 October 2026**.
+not contact the model providers at runtime. Downloaded 16–17 October 2026.
 
 | Asset | Author and source | License | Runtime file |
 | --- | --- | --- | --- |
+| X-wing cockpit (2025) | [MichaelEGA / Open Galaxy](https://github.com/MichaelEGA/Open-Galaxy/tree/main/Assets/Data/objects/cockpit/xwing), [author's release](https://www.moddb.com/games/open-galaxy/addons/xwing-cockpit) | Explicit reuse permission with Open Galaxy credit; `xwing-cockpit/LICENSE.txt` | `public/models/xwing-cockpit/scene.gltf` |
 | X- Wings | [perceval-66 / Sketchfab](https://sketchfab.com/3d-models/x-wings-5dc24fdbc09544df9388890bab2434ad), [download mirror](https://github.com/BoyuanTian/threejs-xwing-lasttry.github.io/tree/main/xwings) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), original attribution retained in `license.txt` | `public/models/x-wing/scene.gltf` |
 | BTL Y-wing | First Strike Development Team; FBX conversion by MichaelEGA / [Open Galaxy](https://github.com/MichaelEGA/Open-Galaxy/tree/main/Assets/Data/objects/ships/firststrike/y-wing) | [Explicit noncommercial reuse permission with credit](https://www.moddb.com/mods/first-strike/news/public-release-of-first-strike-models); see `y-wing/LICENSE.txt` | `public/models/y-wing/scene.gltf` |
-| TIE fighter | [Alberto Calvo / Poly Pizza](https://poly.pizza/m/aba7TBlKyJE) | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | `public/models/tie-fighter.glb` |
+| TIE fighter (runtime) | [Jeroenimo / The Dutchman](https://www.moddb.com/mods/empire-at-war-re/addons/tie-series-freerelease), [Open Galaxy source mirror](https://github.com/MichaelEGA/Open-Galaxy/tree/main/Assets/Data/objects/ships/Jeroenimo/Tie%20Fighters) | Creator permits non-monetary reuse with credit; ModDB labels the release Proprietary, not Creative Commons. See `tie-fighter-detailed/LICENSE.txt` | `public/models/tie-fighter-detailed/scene.gltf` |
+| TIE fighter (comparison reference only) | [Alberto Calvo / Poly Pizza](https://poly.pizza/m/aba7TBlKyJE) | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | Archived at `public/models/tie-fighter.glb`; not rendered |
 | Death Star 1 V1 (reference only) | [Joe Scalise / Poly Pizza](https://poly.pizza/m/8MIVor30XoN) | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | Archived at `public/models/death-star.glb`; not rendered |
 
 The Y-wing permission is asset specific; Open Galaxy's Apache code license
@@ -16,16 +18,40 @@ Model licenses do not grant rights to Star Wars trademarks or franchise IP.
 
 ## Loader and Orientation
 
+X-Wing cockpit by MichaelEGA / Open Galaxy. The author's release permits reuse
+with credit; its generic Creative Commons label does not specify a variant.
+Downloaded 17 October 2026. Converted from the original OBJ to glTF, removing
+four loose line edges while preserving its 64,651 triangles. The runtime
+hides the separate nine-triangle window mesh, maps the original 4096² diffuse
+and emission textures, rotates Y by π, and retains the pilot origin. Geometry
+is not recentered. Metal/gloss texture is not used as a glTF metalness map.
+Files and hashes are recorded in `xwing-cockpit/manifest.json`.
+Reproduce geometry with `node scripts/convert-cockpit.mjs <original-OBJ-path>`;
+the source URL and original blob hash are in `docs/MODEL-RESEARCH.md`.
+
 Use Three.js `GLTFLoader` for every runtime model. They require neither Draco
 nor KTX decoders. Center the loaded object with its world `Box3`, then scale
 uniformly to the chosen gameplay size. Keep a parent group for movement.
 
 | Model | Geometry | Original bounds / direction | Integration |
 | --- | --- | --- | --- |
-| X-wing | 45,866 triangles; 11 meshes; 16 PNGs | Root already converts source Z-up to Y-up; nose points +Z | Rotate Y by π to face the game's −Z direction; maximum dimension about 6.53 |
-| Y-wing | 5,496 triangles; 1 mesh, 2 primitives; original diffuse PNG | About 88.2 × 26.6 × 168.8; +Y up, nose −Z | No extra rotation; target length roughly 14 units |
-| TIE | 2,146 triangles; 5 material primitives; no texture files | About 3.04 × 2.43 × 2.72; +Y up, viewport −Z | No extra rotation; normalize overall size |
+| X-wing | 45,866 triangles; 11 meshes; 16 PNGs | Root already converts source Z-up to Y-up; nose points +Z | Rotate Y by π to face the game's −Z direction; normalize maximum dimension to 19 units |
+| Y-wing | 5,496 triangles; 1 mesh, 2 primitives; original diffuse PNG | About 88.2 × 26.6 × 168.8; +Y up, nose −Z | No extra rotation; normalize maximum dimension to 19 units |
+| TIE | 1,412 triangles (1,394 hull + 18 engines); 512² diffuse and normal maps | Source bounds X −10.22…10.22, Y −13.75…13.75, Z −11.96…11.96; +Z forward | Rotate Y by π to face the game's −Z direction; center and scale from world bounds |
 | Death Star reference | 1,166 triangles; embedded flat materials | Diameter about 0.284, off-center origin | Retained source reference; runtime station uses original procedural geometry |
+
+The TIE glTF was converted from Jeroenimo's FBX and local source textures.
+The baked shadow mesh was excluded; bind-pose transforms were baked into the
+static hull and engines. Source UV orientation was preserved for glTF, and the
+original tangent-space normal map is used with its green channel unchanged.
+The Unity prefab's gun-bank and engine positions establish source +Z forward;
+the world integration rotates it by π around Y. The model is visibly more
+detailed than the prior flat Poly Pizza TIE despite its lower triangle count.
+Use is limited to the creator's non-monetary permission with credit; the
+original ModDB archive was not retrieved, so staged source bytes came from its
+Open Galaxy repository mirror. `public/models/tie-fighter-detailed/manifest.json`
+records the source, conversion, and file hashes. Reproduce with
+`node scripts/convert-tie.mjs <original-fbx-path> [output-directory]`.
 
 The Y-wing glTF was converted from the supplied FBX, extracting the intact
 `y_wing__P1` mesh and excluding overlapping wreck/LOD meshes. Original source
@@ -75,10 +101,18 @@ Offline validation passed: both glTF dependency trees are complete, buffer
 byte lengths match declarations, and both GLB headers/chunk lengths are valid.
 The Y-wing conversion reruns successfully and produces the same SHA-256 hash.
 Mesh bounds, counts, materials, and front direction were inspected from source
-geometry. Final Chromium/WebGL smoke tests passed through `npm run test`: actual
-X-wing, Y-wing and TIE models loaded with their local materials/textures, with
-no failed requests, shader errors or uncaught page errors. Desktop (1440×900)
-and narrow (390×844) PNG screenshots were visually inspected. The reference
-Death Star file also passed GLTFLoader parsing; runtime station geometry is
-project-authored as explained above. Physical mobile devices and hardware GPU
-performance were not measured.
+geometry. Earlier Chromium/WebGL smoke tests passed for the X-wing, Y-wing, and
+former Poly Pizza TIE, with local assets and no failed requests or shader
+errors. The selected Jeroenimo TIE replacement was visually compared in front
+and rear three-quarter screenshots and is clearly more detailed; its final
+runtime integration smoke test passed with the updated scene wiring. The
+reference Death Star file also passed GLTFLoader parsing; runtime station
+geometry is project-authored as explained above. Physical mobile devices and
+hardware GPU performance were not measured.
+
+The final updated build passed all 50 automated checks, including real
+Chromium/WebGL loading of the new TIE and X-wing cockpit, campaign controls,
+desktop/touch HUDs, and matching model comparisons. Page, shader/render and
+resource-error assertions passed. Both converters are reproducible; the TIE
+glTF and binary were regenerated and matched byte for byte. Cockpit UV V is
+flipped in conversion to preserve the original image sampling in glTF.

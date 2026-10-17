@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 function seededRandom(seed) {
   let state = seed;
@@ -31,7 +32,78 @@ export function panelNormalTexture(image) {
   return texture;
 }
 
-/** Thousands of layered details rendered by seven bounded instance batches. */
+/** Authored districts have nested service panels rather than repeating brick rows. */
+export function makeStationSurfaceTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 4096;
+  canvas.height = 2048;
+  const ctx = canvas.getContext('2d');
+  const random = seededRandom(197704);
+  ctx.fillStyle = '#343c43';
+  ctx.fillRect(0, 0, 4096, 2048);
+  const panel = (x, y, w, h, value) => {
+    ctx.fillStyle = `rgb(${value},${value + 6},${value + 11})`;
+    ctx.fillRect(x + 2, y + 2, w - 4, h - 4);
+    ctx.fillStyle = 'rgba(183,194,200,.25)';
+    ctx.fillRect(x + 3, y + 3, w - 6, 1);
+    ctx.fillRect(x + 3, y + 3, 1, h - 6);
+    ctx.fillStyle = 'rgba(8,14,19,.45)';
+    ctx.fillRect(x + w - 3, y + 3, 1, h - 5);
+  };
+  // Independent vertical district spans avoid a latitude-wide masonry grid.
+  for (let x = -70; x < 4096;) {
+    const w = 180 + Math.floor(random() * 300);
+    for (let y = -Math.floor(random() * 170); y < 2048;) {
+      const h = 130 + Math.floor(random() * 280);
+      const value = 57 + Math.floor(random() * 30);
+      panel(x, y, w, h, value);
+      for (let sx = x + 9; sx < x + w - 14;) {
+        const sw = Math.min(26 + Math.floor(random() * 89), x + w - 8 - sx);
+        for (let sy = y + 10; sy < y + h - 12;) {
+          const sh = Math.min(20 + Math.floor(random() * 65), y + h - 8 - sy);
+          panel(sx, sy, sw, sh, value - 8 + Math.floor(random() * 17));
+          for (let detail = 0; detail < 7; detail++) {
+            const dx = sx + 5 + random() * Math.max(1, sw - 12);
+            const dy = sy + 5 + random() * Math.max(1, sh - 12);
+            ctx.fillStyle = detail % 3 ? 'rgba(13,21,28,.40)' : 'rgba(179,191,198,.27)';
+            ctx.fillRect(dx, dy, 2 + random() * Math.max(2, sw * .4), 1 + random() * 2);
+          }
+          sy += sh + 2;
+        }
+        sx += sw + 3;
+      }
+      // Occasional exposed conduits and dark machinery bays interrupt panels.
+      if (random() > .42) {
+        const cy = y + h * (.2 + random() * .6);
+        ctx.fillStyle = '#242c33';
+        ctx.fillRect(x + 6, cy, w - 12, 7);
+        ctx.fillStyle = '#737d84';
+        ctx.fillRect(x + 8, cy + 1, w - 16, 1);
+      }
+      if (random() > .55) {
+        ctx.fillStyle = '#252e35';
+        ctx.fillRect(x + w * .65, y + 12, w * .24, h * .27);
+        for (let vent = 0; vent < 6; vent++) {
+          ctx.fillStyle = '#66717a';
+          ctx.fillRect(x + w * .67, y + 16 + vent * h * .035, w * .19, 2);
+        }
+      }
+      y += h + 5;
+    }
+    x += w + 7;
+  }
+  // The equatorial service trench is the only continuous horizontal band.
+  ctx.fillStyle = '#111b24';
+  ctx.fillRect(0, 1018, 4096, 12);
+  ctx.fillStyle = '#77828a';
+  ctx.fillRect(0, 1017, 4096, 1);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+  return texture;
+}
+
+/** Multiscale industrial modules share ten bounded instance batches. */
 export function addTrenchDetail(parent, { wallX, floorY, topY, startZ, endZ, material, seed = 1977 }) {
   const random = seededRandom(seed);
   const dummy = new THREE.Object3D();
@@ -45,43 +117,74 @@ export function addTrenchDetail(parent, { wallX, floorY, topY, startZ, endZ, mat
   const pipes = [];
   const lights = [];
   const floor = [];
-  const add = (list, x, y, z, sx, sy, sz, rotation = 0) => list.push({ x, y, z, sx, sy, sz, rotation, tint: 0.69 + random() * 0.35 });
+  const insets = [];
+  const collars = [];
+  const brackets = [];
+  // Cinema walls are narrower: detail depth stays proportional to the set.
+  const depth = Math.min(1, wallX / 81);
+  const add = (list, x, y, z, sx, sy, sz, rotation = 0) => list.push({ x, y, z, sx, sy, sz, rotation, tint: 0.78 + random() * 0.26 });
   for (const side of [-1, 1]) {
-    const rows = Math.max(5, Math.round(height / 19));
-    for (let z = startZ; z > endZ; z -= 25) {
-      for (let row = 0; row < rows; row++) {
-        const y = floorY + (row + 0.5) * height / rows;
-        const span = 10 + random() * 13;
-        const blockHeight = 7 + random() * (height / rows - 8);
-        const offsetZ = z - random() * 7 - (row % 2 ? 8 : 0);
-        add(recesses, side * (wallX - 0.8), y, offsetZ, 0.9, blockHeight + 2.5, span + 2.5);
-        add(plates, side * (wallX - 1.7 - random() * 1.5), y + 0.5, offsetZ, 1.1 + random() * 2.3, blockHeight, span);
-        if (random() > 0.35) {
-          add(machinery, side * (wallX - 4), y - blockHeight * 0.12, offsetZ + span * 0.15, 1.2 + random() * 1.2, 1.5 + random() * 4, 2 + random() * 5);
-          add(machinery, side * (wallX - 4.4), y + blockHeight * 0.23, offsetZ - span * 0.2, 0.8, 0.7, span * 0.55);
+    // Each band has its own panel widths/offset: there is no shared brick grid.
+    const rows = Math.max(3, Math.round(height / 46));
+    const band = height / rows;
+    for (let row = 0; row < rows; row++) {
+      const y = floorY + (row + .5) * band;
+      for (let cursor = startZ; cursor > endZ;) {
+        const span = Math.min(38 + random() * 80, cursor - endZ);
+        if (span < 4) break;
+        const z = cursor - span * .5;
+        const panelHeight = band - 3 - random() * 6;
+        add(recesses, side * (wallX - .6 * depth), y, z, depth, panelHeight + 2, span - .5);
+        add(plates, side * (wallX - 2 * depth), y, z, (1.5 + random()) * depth, panelHeight, span - 3);
+        // Some districts have a recessed vent; others retain a clean plate field.
+        if (random() > .60) {
+          const ventZ = z + span * .18;
+          add(insets, side * (wallX - 3.5 * depth), y, ventZ, .5 * depth, panelHeight * .55, span * .27);
+          for (let slat = 0; slat < 5; slat++) {
+            add(machinery, side * (wallX - 4 * depth), y - panelHeight * .21 + slat * panelHeight * .105, ventZ, .8 * depth, .65, span * .24);
+          }
+        } else if (random() > .5) {
+          add(machinery, side * (wallX - 4 * depth), y - panelHeight * .15, z - span * .16, 2 * depth, panelHeight * .4, 7 + random() * 9);
+          add(brackets, side * (wallX - 5.2 * depth), y - panelHeight * .15, z - span * .16, .6 * depth, panelHeight * .25, 9 + random() * 8);
+        }
+        cursor -= span;
+      }
+    }
+    for (let z = startZ - 25 - random() * 50; z > endZ + 100; z -= 190 + random() * 110) {
+      const pillarHeight = height * (.48 + random() * .4);
+      const pillarY = floorY + pillarHeight * .5;
+      add(ribs, side * (wallX - 4 * depth), pillarY, z, 5 * depth, pillarHeight, 7);
+      add(brackets, side * (wallX - 7 * depth), floorY + 9, z, 3 * depth, 16, 21);
+      const pipeY = floorY + height * (.22 + random() * .55);
+      const run = Math.min(100 + random() * 140, z - endZ);
+      for (let lane = 0; lane < 3; lane++) {
+        const py = pipeY + lane * 2.6;
+        const radius = (.45 + lane * .12) * depth;
+        const px = side * (wallX - (6 + lane * .6) * depth);
+        add(pipes, px, py, z - run / 2, radius, run, radius, Math.PI / 2);
+        // Short vertical risers, sleeves and clamp brackets form actual assemblies.
+        add(pipes, px, py + 6, z - run, radius, 12, radius);
+        for (const t of [.08, .52, .94]) {
+          add(collars, px, py, z - run * t, radius * 1.45, 1.2, radius * 1.45, Math.PI / 2);
         }
       }
+      add(brackets, side * (wallX - 5 * depth), pipeY + 2.6, z - run * .52, 3 * depth, 11, 1.8);
+      add(lights, side * (wallX - 7 * depth), floorY + height * .66, z + 7, .4 * depth, .8, 9);
     }
-    for (let z = startZ - 8; z > endZ; z -= 120) {
-      add(ribs, side * (wallX - 3), floorY + height * 0.5, z, 4.5, height - 8, 3.2);
-      add(ribs, side * (wallX - 5.5), floorY + 9, z - 6, 2.5, 13, 17);
-      for (let row = 0; row < 5; row++) {
-        add(pipes, side * (wallX - 5 - row % 2), floorY + 17 + row * height * 0.18, z - 34, 0.45 + random() * 0.55, 36 + random() * 64, 0.45 + random() * 0.55, Math.PI / 2);
-      }
-      if (Math.floor((startZ - z) / 120) % 2 === 0) add(lights, side * (wallX - 6), floorY + height * 0.66, z + 10, 0.3, 0.65, 7);
-    }
-    for (let z = startZ; z > endZ; z -= 42) {
-      add(floor, side * (wallX - 15), floorY + 0.6, z, 17, 1.2, 29);
-      add(machinery, side * (wallX - 9), floorY + 3, z, 7, 5, 12);
+    for (let z = startZ; z > endZ; z -= 67 + random() * 35) {
+      // All playable wall decoration remains outside |x|=65.
+      add(floor, side * (wallX - 7 * depth), floorY + .6, z, 9 * depth, 1.2, 48);
+      add(machinery, side * (wallX - 7 * depth), floorY + 3, z, 7 * depth, 5, 12);
     }
     // Tall parapet machinery continues the canyon silhouette into the sky.
-    for (let z = startZ - 20; z > endZ; z -= 95) {
+    for (let z = startZ - 20; z > endZ; z -= 150 + random() * 100) {
       const h = 6 + random() * 15;
       add(ribs, side * (wallX + 9), topY + h / 2, z, 21, h, 22 + random() * 27);
       add(machinery, side * (wallX + 9), topY + h + 1.3, z - 2, 14, 2.6, 16);
     }
   }
   const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
+  const bevelGeometry = new RoundedBoxGeometry(1, 1, 1, 1, .065);
   const pipeGeometry = new THREE.CylinderGeometry(1, 1, 1, 7);
   const dark = new THREE.MeshStandardMaterial({ color: 0x202832, roughness: 0.92, metalness: 0.45 });
   const pipeMaterial = new THREE.MeshStandardMaterial({ color: 0x75818a, roughness: 0.56, metalness: 0.65 });
@@ -89,10 +192,12 @@ export function addTrenchDetail(parent, { wallX, floorY, topY, startZ, endZ, mat
   let total = 0;
   let shadowInstances = 0;
   for (const [entries, geometry, mat, castShadow] of [
-    [recesses, boxGeometry, dark, false], [plates, boxGeometry, material, true],
-    [machinery, boxGeometry, pipeMaterial, false], [ribs, boxGeometry, material, true],
+    [recesses, boxGeometry, dark, false], [plates, bevelGeometry, material, true],
+    [machinery, boxGeometry, pipeMaterial, false], [ribs, bevelGeometry, material, true],
     [pipes, pipeGeometry, pipeMaterial, false], [lights, boxGeometry, warm, false],
     [floor, boxGeometry, material, false],
+    [insets, boxGeometry, dark, false], [collars, pipeGeometry, pipeMaterial, false],
+    [brackets, boxGeometry, pipeMaterial, false],
   ]) {
     const mesh = new THREE.InstancedMesh(geometry, mat, entries.length);
     mesh.name = 'Industrial trench detail';
@@ -110,5 +215,5 @@ export function addTrenchDetail(parent, { wallX, floorY, topY, startZ, endZ, mat
     total += entries.length;
     if (castShadow) shadowInstances += entries.length;
   }
-  return { instances: total, batches: 7, shadowInstances, length, layeredPanels: plates.length, pipes: pipes.length, warmLights: lights.length };
+  return { instances: total, batches: 10, shadowInstances, length, layeredPanels: plates.length, pipes: pipes.length, warmLights: lights.length, beveledPanels: plates.length, serviceCollars: collars.length, multiscale: true };
 }

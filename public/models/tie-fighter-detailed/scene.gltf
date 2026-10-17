@@ -1,0 +1,345 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "THREE.GLTFExporter r180",
+    "extras": {
+      "author": "Jeroenimo (The Dutchman)",
+      "source": "https://www.moddb.com/mods/empire-at-war-re/addons/tie-series-freerelease",
+      "payloadMirror": "https://github.com/MichaelEGA/Open-Galaxy/tree/main/Assets/Data/objects/ships/Jeroenimo/Tie%20Fighters",
+      "permission": "Creator permits non-monetary reuse with proper credit; proprietary page license. Not a Creative Commons license.",
+      "modifications": "Removed baked Shadow mesh; baked each source mesh’s bind-pose bone transform into static geometry; retained TIE_Fighter and Twin_Ion_Engines; generated UV tangent attributes using Three.js BufferGeometry.computeTangents; inverted V to preserve Unity TextureLoader flipY sampling with glTF flipY=false; attached original diffuse PNG and Unity normal-map PNG as local external images; no source silhouette or scale edits."
+    }
+  },
+  "scenes": [
+    {
+      "nodes": [
+        0,
+        1
+      ]
+    }
+  ],
+  "scene": 0,
+  "nodes": [
+    {
+      "name": "TIE_Fighter",
+      "mesh": 0
+    },
+    {
+      "name": "Twin_Ion_Engines",
+      "mesh": 1
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 26928,
+      "target": 34962,
+      "byteStride": 12
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 26928,
+      "byteLength": 26928,
+      "target": 34962,
+      "byteStride": 12
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 53856,
+      "byteLength": 17952,
+      "target": 34962,
+      "byteStride": 8
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 71808,
+      "byteLength": 35904,
+      "target": 34962,
+      "byteStride": 16
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 107712,
+      "byteLength": 8364,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 116076,
+      "byteLength": 360,
+      "target": 34962,
+      "byteStride": 12
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 116436,
+      "byteLength": 360,
+      "target": 34962,
+      "byteStride": 12
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 116796,
+      "byteLength": 240,
+      "target": 34962,
+      "byteStride": 8
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 117036,
+      "byteLength": 480,
+      "target": 34962,
+      "byteStride": 16
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 117516,
+      "byteLength": 108,
+      "target": 34963
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 117624,
+      "uri": "scene.bin"
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 2244,
+      "max": [
+        10.224794387817383,
+        13.745649337768555,
+        11.961077690124512
+      ],
+      "min": [
+        -10.224794387817383,
+        -13.745651245117188,
+        -11.961080551147461
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 2244,
+      "max": [
+        1,
+        1,
+        1
+      ],
+      "min": [
+        -1,
+        -1,
+        -1
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 2244,
+      "max": [
+        0.9983252286911011,
+        0.9980974793434143
+      ],
+      "min": [
+        0.0023910533636808395,
+        0.0020149946212768555
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5126,
+      "count": 2244,
+      "max": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "min": [
+        -1,
+        -1,
+        -1,
+        -1
+      ],
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 4,
+      "componentType": 5123,
+      "count": 4182,
+      "max": [
+        2243
+      ],
+      "min": [
+        0
+      ],
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 5,
+      "componentType": 5126,
+      "count": 30,
+      "max": [
+        3.015470504760742,
+        0.2521911859512329,
+        -2.9861762523651123
+      ],
+      "min": [
+        -3.015470027923584,
+        -0.23995937407016754,
+        -3.4593729972839355
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 6,
+      "componentType": 5126,
+      "count": 30,
+      "max": [
+        1,
+        0.000020572661014739424,
+        4.56804152102909e-21
+      ],
+      "min": [
+        -0.000020655499611166306,
+        -1,
+        -1
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 7,
+      "componentType": 5126,
+      "count": 30,
+      "max": [
+        0.827087938785553,
+        0.5666049718856812
+      ],
+      "min": [
+        0.8170695900917053,
+        0.5560718774795532
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 8,
+      "componentType": 5126,
+      "count": 30,
+      "max": [
+        1,
+        1,
+        0.000026913528927252628,
+        1
+      ],
+      "min": [
+        -1,
+        -1,
+        -0.000034622389648575336,
+        -1
+      ],
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 9,
+      "componentType": 5123,
+      "count": 54,
+      "max": [
+        29
+      ],
+      "min": [
+        0
+      ],
+      "type": "SCALAR"
+    }
+  ],
+  "materials": [
+    {
+      "pbrMetallicRoughness": {
+        "metallicFactor": 0,
+        "roughnessFactor": 0.5,
+        "baseColorTexture": {
+          "index": 0,
+          "texCoord": 0
+        }
+      },
+      "name": "Jeroenimo TIE hull",
+      "normalTexture": {
+        "index": 1,
+        "texCoord": 0,
+        "scale": 1
+      }
+    },
+    {
+      "pbrMetallicRoughness": {
+        "metallicFactor": 0,
+        "roughnessFactor": 0.72
+      },
+      "name": "Jeroenimo TIE engines"
+    }
+  ],
+  "meshes": [
+    {
+      "primitives": [
+        {
+          "mode": 4,
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2,
+            "TANGENT": 3
+          },
+          "indices": 4,
+          "material": 0
+        }
+      ]
+    },
+    {
+      "primitives": [
+        {
+          "mode": 4,
+          "attributes": {
+            "POSITION": 5,
+            "NORMAL": 6,
+            "TEXCOORD_0": 7,
+            "TANGENT": 8
+          },
+          "indices": 9,
+          "material": 1
+        }
+      ]
+    }
+  ],
+  "images": [
+    {
+      "uri": "Empire_TIE_Fighter.png"
+    },
+    {
+      "uri": "Empire_TIE_Fighter_B.png"
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "textures": [
+    {
+      "sampler": 0,
+      "source": 0
+    },
+    {
+      "sampler": 0,
+      "source": 1
+    }
+  ]
+}

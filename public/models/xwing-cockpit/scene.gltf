@@ -1,0 +1,259 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "THREE.GLTFExporter r180",
+    "extras": {
+      "author": "MichaelEGA / Open Galaxy",
+      "permission": "Free to use, just credit the Open Galaxy project.",
+      "source": "https://www.moddb.com/games/open-galaxy/addons/xwing-cockpit",
+      "modifications": "Removed four loose OBJ line edges; faces retained; UV V inverted to preserve source TextureLoader sampling in glTF; basecolor/emission mapped; windows hidden by runtime; source metal texture unassigned because Unity metal/gloss channels differ from glTF metallic-roughness."
+    }
+  },
+  "scenes": [
+    {
+      "name": "AuxScene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "scene": 0,
+  "nodes": [
+    {
+      "children": [
+        1,
+        2
+      ]
+    },
+    {
+      "name": "cockpit_cockpit",
+      "mesh": 0
+    },
+    {
+      "name": "windows_window",
+      "mesh": 1
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 2327112,
+      "target": 34962,
+      "byteStride": 12
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 2327112,
+      "byteLength": 2327112,
+      "target": 34962,
+      "byteStride": 12
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 4654224,
+      "byteLength": 1551408,
+      "target": 34962,
+      "byteStride": 8
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 6205632,
+      "byteLength": 324,
+      "target": 34962,
+      "byteStride": 12
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 6205956,
+      "byteLength": 324,
+      "target": 34962,
+      "byteStride": 12
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 6206280,
+      "byteLength": 216,
+      "target": 34962,
+      "byteStride": 8
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 6206496,
+      "uri": "scene.bin"
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 193926,
+      "max": [
+        0.538769006729126,
+        0.24431300163269043,
+        1.2101869583129883
+      ],
+      "min": [
+        -0.5376399755477905,
+        -0.4043160080909729,
+        -0.2350980043411255
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 193926,
+      "max": [
+        1,
+        1,
+        1
+      ],
+      "min": [
+        -1,
+        -1,
+        -1
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 193926,
+      "max": [
+        0.982492983341217,
+        0.989001989364624
+      ],
+      "min": [
+        0.021446000784635544,
+        0.02201402187347412
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5126,
+      "count": 27,
+      "max": [
+        0.5244629979133606,
+        0.24431300163269043,
+        1.1915830373764038
+      ],
+      "min": [
+        -0.5241310000419617,
+        -0.14398199319839478,
+        -0.2203039973974228
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 4,
+      "componentType": 5126,
+      "count": 27,
+      "max": [
+        0.90829998254776,
+        -0.39149999618530273,
+        -0.14749999344348907
+      ],
+      "min": [
+        -0.90829998254776,
+        -0.9639999866485596,
+        -0.26579999923706055
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 5,
+      "componentType": 5126,
+      "count": 27,
+      "max": [
+        0.6418750286102295,
+        1
+      ],
+      "min": [
+        0,
+        0
+      ],
+      "type": "VEC2"
+    }
+  ],
+  "materials": [
+    {
+      "pbrMetallicRoughness": {
+        "metallicFactor": 0.15,
+        "roughnessFactor": 0.75,
+        "baseColorTexture": {
+          "index": 0
+        }
+      },
+      "name": "cockpit",
+      "emissiveTexture": {
+        "index": 1
+      },
+      "emissiveFactor": [
+        0.7,
+        0.7,
+        0.7
+      ]
+    },
+    {
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          1,
+          1,
+          1,
+          0.06
+        ],
+        "metallicFactor": 0,
+        "roughnessFactor": 0.18
+      },
+      "alphaMode": "BLEND",
+      "name": "window"
+    }
+  ],
+  "meshes": [
+    {
+      "primitives": [
+        {
+          "mode": 4,
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2
+          },
+          "material": 0
+        }
+      ]
+    },
+    {
+      "primitives": [
+        {
+          "mode": 4,
+          "attributes": {
+            "POSITION": 3,
+            "NORMAL": 4,
+            "TEXCOORD_0": 5
+          },
+          "material": 1
+        }
+      ]
+    }
+  ],
+  "images": [
+    {
+      "uri": "cockpit.png"
+    },
+    {
+      "uri": "cockpit_light.png"
+    }
+  ],
+  "textures": [
+    {
+      "source": 0
+    },
+    {
+      "source": 1
+    }
+  ]
+}
