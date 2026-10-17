@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve, extname, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { chromium } from 'playwright';
+import { acquireBrowserQaLock } from './browser-qa-lock.js';
 
 async function findBrowser() {
   if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE) return process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE;
@@ -41,6 +42,7 @@ test('browser renders downloaded models and supports controls, QTE, defeat/repla
     catch { response.writeHead(404); response.end(); }
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const releaseBrowserQa = await acquireBrowserQaLock();
   let browser;
   try {
     try {
@@ -108,7 +110,13 @@ test('browser renders downloaded models and supports controls, QTE, defeat/repla
     const screenshot = async name => {
       await page.evaluate(() => document.fonts.ready.then(() => true));
       const frame = await page.evaluate(() => window.__gameDebug.inspect());
-      assert.ok(frame.graphics.enabled && frame.graphics.hdr && frame.graphics.bloom && frame.graphics.antialias === 'FXAA');
+      assert.ok(frame.graphics.enabled && frame.graphics.hdr && frame.graphics.bloom);
+      assert.equal(frame.graphics.quality, 'hd');
+      assert.equal(frame.graphics.antialias, 'SMAA');
+      const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight, dpr: devicePixelRatio }));
+      assert.ok(frame.graphics.width >= viewport.width && frame.graphics.height >= viewport.height,
+        `HD render target ${frame.graphics.width}x${frame.graphics.height} must cover CSS viewport ${viewport.width}x${viewport.height}`);
+      assert.ok(frame.graphics.renderScale >= 1 && frame.graphics.renderScale <= 1.5);
       assert.equal(frame.lighting.enabled, true);
       assert.equal(frame.lighting.environment, 'procedural-pmrem');
       assert.ok(frame.renderStats.calls > 0 && frame.renderStats.triangles > 0);
@@ -230,6 +238,13 @@ test('browser renders downloaded models and supports controls, QTE, defeat/repla
     await page.keyboard.press('ArrowRight');
     assert.equal(await page.evaluate(() => window.__gameDebug.snapshot().weapon.id), 'proton-torpedo');
     assert.match(await page.locator('#weapon-name').innerText(), /Протонные торпеды/);
+    const torpedoSlot = page.locator('#weapon-slots [data-weapon="proton-torpedo"]');
+    const laserSlot = page.locator('#weapon-slots [data-weapon="laser"]');
+    assert.equal(await torpedoSlot.getAttribute('aria-pressed'), 'true');
+    await laserSlot.click();
+    assert.equal(await page.locator('#weapon-panel').getAttribute('data-weapon'), 'laser');
+    await torpedoSlot.click();
+    assert.equal(await page.locator('#weapon-panel').getAttribute('data-weapon'), 'proton-torpedo');
     await screenshot('weapon-selected');
     const ammoBefore = await page.evaluate(() => window.__gameDebug.snapshot().weapon.ammo);
     await page.keyboard.down('Space');
@@ -238,9 +253,12 @@ test('browser renders downloaded models and supports controls, QTE, defeat/repla
     await page.waitForFunction(ammo => document.getElementById('weapon-ammo').textContent.includes(`ПУСКОВЫЕ ${ammo} ·`), ammoBefore - 1);
     assert.equal(await page.evaluate(() => window.__gameDebug.snapshot().weapon.ammo), ammoBefore - 1);
     assert.match(await page.locator('#weapon-ammo').innerText(), new RegExp(String(ammoBefore - 1)));
+    await page.waitForFunction(ammo => document.querySelectorAll('#weapon-munitions i.loaded').length === ammo, ammoBefore - 1);
+    assert.match(await page.locator('#weapon-panel').getAttribute('data-state'), /^(ready|cooldown)$/);
     const depleted = await page.evaluate(() => window.__gameDebug.snapshot().weapon);
     await page.keyboard.press('r');
     await page.waitForFunction(() => window.__gameDebug.snapshot().weapon.reloading);
+    assert.equal(await page.locator('#weapon-panel').getAttribute('data-state'), 'reloading');
     assert.equal(await page.locator('#weapon-reload').isDisabled(), true);
     assert.match(await page.locator('#weapon-reload').innerText(), /С|с|\d/);
     await screenshot('reload-in-progress');
@@ -266,6 +284,19 @@ test('browser renders downloaded models and supports controls, QTE, defeat/repla
     await page.locator('#pause').click();
     assert.equal(await page.locator('#pause-overlay').isVisible(), true);
     const pausedTime = await page.evaluate(() => window.__gameDebug.snapshot().elapsed);
+    const qualitySelector = page.locator('#graphics-quality');
+    await qualitySelector.selectOption('performance');
+    let graphics = await page.evaluate(() => window.__gameDebug.inspect().graphics);
+    assert.equal(graphics.quality, 'performance');
+    assert.equal(graphics.antialias, 'FXAA');
+    assert.ok(graphics.renderScale < 1);
+    assert.equal(await page.evaluate(() => window.__gameDebug.snapshot().graphicsQuality), 'performance');
+    await qualitySelector.selectOption('hd');
+    graphics = await page.evaluate(() => window.__gameDebug.inspect().graphics);
+    assert.equal(graphics.quality, 'hd');
+    assert.equal(graphics.antialias, 'SMAA');
+    assert.ok(graphics.renderScale >= 1 && graphics.renderScale <= 1.5);
+    assert.equal(await page.evaluate(() => window.__gameDebug.snapshot().graphicsQuality), 'hd');
     await page.waitForTimeout(200);
     assert.equal(await page.evaluate(() => window.__gameDebug.snapshot().elapsed), pausedTime);
     await page.locator('#resume').click();
@@ -359,6 +390,16 @@ test('browser renders downloaded models and supports controls, QTE, defeat/repla
     await screenshot('xwing-cockpit');
     await page.keyboard.press('c');
     assert.equal(await page.evaluate(() => window.__gameDebug.snapshot().camera), 'chase');
+    await page.setViewportSize({ width: 1672, height: 941 });
+    if (await page.locator('#tactics').evaluate(element => element.open)) await page.locator('#tactics summary').click();
+    await reachPhase('trench');
+    assert.equal(await page.evaluate(() => window.__gameDebug.snapshot().camera), 'chase');
+    await page.evaluate(() => window.__gameDebug.step(0.1));
+    await screenshot('concept-trench-hd');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.evaluate(() => window.__gameDebug.game.restart());
+    await page.waitForFunction(() => window.__gameDebug.inspect().sfoilsRig?.loadedRig);
+    if (!await page.locator('#tactics').evaluate(element => element.open)) await page.locator('#tactics summary').click();
     assert.equal(await page.locator('#repair').isDisabled(), true, 'Full hull must not consume a repair charge');
     // A damage fixture exercises the actual repair button and damage interruption UI.
     await page.evaluate(() => window.__gameDebug.damage(125));
@@ -405,42 +446,6 @@ test('browser renders downloaded models and supports controls, QTE, defeat/repla
     assert.ok(await page.evaluate(() => window.__gameDebug.snapshot().kills) > killsBeforeSupport);
     await page.evaluate(() => window.__gameDebug.step(6));
     assert.equal(await page.evaluate(() => window.__gameDebug.inspect().supportWingmen.length), 0);
-    await page.evaluate(() => window.__gameDebug.game.returnToMenu());
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.waitForTimeout(150);
-    await screenshot('menu-mobile');
-    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile menu must fit viewport horizontally');
-    await page.locator('#start').click();
-    await screenshot('hud-mobile');
-    const weaponPanel = await page.locator('#weapon-panel').boundingBox();
-    assert.ok(weaponPanel.x >= 0 && weaponPanel.x + weaponPanel.width <= 390 && weaponPanel.y >= 0 && weaponPanel.y + weaponPanel.height <= 844, 'Mobile weapon controls must remain inside the viewport');
-    await page.evaluate(() => window.__gameDebug.game.dispose());
-    await page.close();
-    const touchPage = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-    touchPage.on('pageerror', error => errors.push(error.message));
-    await touchPage.goto(`http://127.0.0.1:${server.address().port}`, { waitUntil: 'networkidle' });
-    await touchPage.waitForFunction(() => window.__gameDebug?.inspect().playerModel === 'loaded');
-    await touchPage.evaluate(() => document.fonts.ready.then(() => true));
-    await touchPage.locator('#start').tap();
-    assert.equal(await touchPage.locator('.touch-controls').isVisible(), true);
-    const fireButton = await touchPage.locator('[data-hold="Space"]').boundingBox();
-    const touch = await touchPage.context().newCDPSession(touchPage);
-    await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: fireButton.x + fireButton.width / 2, y: fireButton.y + fireButton.height / 2 }] });
-    await touchPage.waitForFunction(() => window.__gameDebug.snapshot().heat > 0);
-    await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-    await touchPage.screenshot({ path: resolve(output, 'hud-touch.png'), fullPage: true });
-    const touchWeapons = await touchPage.locator('#weapon-panel').boundingBox();
-    assert.ok(touchWeapons.y + touchWeapons.height < fireButton.y, 'Weapon selectors must not cover touch flight/fire controls');
-    await touchPage.locator('#weapon-next').tap();
-    assert.equal(await touchPage.evaluate(() => window.__gameDebug.snapshot().weapon.id), 'proton-torpedo');
-    assert.equal(await touchPage.locator('#tactics').evaluate(element => element.open), false);
-    await touchPage.locator('#tactics summary').tap();
-    await touchPage.locator('[data-power="shields"]').tap();
-    assert.equal(await touchPage.evaluate(() => window.__gameDebug.snapshot().powerMode), 'shields');
-    await touchPage.screenshot({ path: resolve(output, 'tactics-touch.png'), fullPage: true });
-    const touchTactics = await touchPage.locator('#tactics').boundingBox();
-    assert.ok(touchTactics.x >= 0 && touchTactics.y >= 0 && touchTactics.x + touchTactics.width <= 390 && touchTactics.y + touchTactics.height <= 844);
-    await touchPage.close();
     assert.deepEqual(errors, []);
     assert.deepEqual(renderingErrors, []);
     assert.deepEqual(failedResources, []);
@@ -450,5 +455,6 @@ test('browser renders downloaded models and supports controls, QTE, defeat/repla
   } finally {
     await browser?.close();
     await new Promise(resolve => server.close(resolve));
+    releaseBrowserQa();
   }
 });

@@ -23,3 +23,19 @@ test('chase camera stays outside the hull on cockpit switches and flight correct
     }
   } finally { fixture.close(); }
 });
+
+test('boost does not push the chase camera away and shrink the ship', async () => {
+  const fixture = await engineHarness();
+  try {
+    fixture.game.start();
+    fixture.player().position.y = 3000;
+    fixture.key('ShiftLeft');
+    for (let index = 0; index < 60; index++) {
+      fixture.debug.step(0.1);
+      const state = fixture.debug.inspect();
+      const distance = new THREE.Vector3(...state.cameraPosition).distanceTo(new THREE.Vector3(...state.playerPosition));
+      assert.ok(distance <= Math.hypot(25.5, 6.5) + 0.001, `chase framing must remain consistent at speed: ${distance}`);
+      assert.ok(distance >= 16);
+    }
+  } finally { fixture.close(); }
+});

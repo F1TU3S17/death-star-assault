@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { createXWingSfoilRig } from './sfoils.js';
-import { addTrenchDetail, panelNormalTexture, makeStationSurfaceTexture } from './world-detail.js';
+import { addTrenchDetail, panelNormalTexture, makeStationSurfaceTexture, makeTrenchMetalTextures } from './world-detail.js';
 import { createDetailedCockpit } from './detailed-cockpit.js';
 
 const silver = new THREE.MeshStandardMaterial({ color: 0xa3a9b0, roughness: 0.82, metalness: 0.35 });
@@ -87,9 +87,9 @@ function addEngineLights(root, kind) {
     root.add(plume);
     root.userData.engineNodes.push({ node: plume, side: Math.sign(point[0]), upper: Math.sign(point[1]) });
     root.userData.engineMaterials.push(plasma);
-    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: radialGlowTexture(), color: new THREE.Color(1.75, 0.19, 0.81), blending: THREE.AdditiveBlending, transparent: true, opacity: 0.76, depthWrite: false, toneMapped: false, fog: false }));
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: radialGlowTexture(), color: new THREE.Color(1.5, 0.15, 0.66), blending: THREE.AdditiveBlending, transparent: true, opacity: 0.62, depthWrite: false, toneMapped: false, fog: false }));
     halo.position.set(point[0], point[1], point[2] + 0.08);
-    const haloSize = kind === 'ywing' ? 2.65 : 1.95;
+    const haloSize = kind === 'ywing' ? 2.2 : 1.65;
     halo.scale.setScalar(haloSize);
     root.add(halo);
     root.userData.engineNodes.push({ node: halo, side: Math.sign(point[0]), upper: Math.sign(point[1]) });
@@ -253,10 +253,16 @@ export function createShip(kind = 'xwing', modelUrl, modelOptions = {}) {
         const tune = (original) => {
           if (tunedMaterials.has(original)) return tunedMaterials.get(original);
           const material = original.clone();
-          if (material.color) material.color.multiplyScalar(kind === 'tie' ? 0.96 : 0.98);
-          if ('roughness' in material) material.roughness = material.roughnessMap ? 0.82 : kind === 'tie' ? 0.54 : 0.64;
+          const rebel = kind === 'xwing' || kind === 'ywing';
+          // Keep authored paint/metal maps, but avoid clean white hulls under
+          // the trench key and fill. Rougher paint retains the red markings.
+          if (material.color) material.color.multiplyScalar(rebel ? 0.8 : kind === 'tie' ? 0.96 : 0.98);
+          if ('roughness' in material) material.roughness = material.roughnessMap ? (rebel ? 1 : 0.9) : kind === 'tie' ? 0.58 : rebel ? 0.82 : 0.72;
           if ('metalness' in material) material.metalness = material.metalnessMap ? 0.75 : Math.min(0.4, material.metalness);
-          material.envMapIntensity = kind === 'tie' ? 0.65 : 0.85;
+          material.envMapIntensity = rebel ? 0.58 : kind === 'tie' ? 0.65 : 0.72;
+          for (const texture of [material.map, material.normalMap, material.roughnessMap, material.metalnessMap]) {
+            if (texture) texture.anisotropy = 8;
+          }
           if ('emissiveIntensity' in material) material.emissiveIntensity = Math.min(0.18, material.emissiveIntensity);
           tunedMaterials.set(original, material);
           return material;
@@ -297,9 +303,9 @@ export function createShip(kind = 'xwing', modelUrl, modelOptions = {}) {
 export function createWorld(scene) {
   let disposed = false;
   const graphics = {
-    style: 'layered-industrial-metal', phase: 'menu', stationTexture: [4096, 2048],
+    style: 'machined-metal-service-districts', phase: 'menu', stationTexture: [4096, 2048],
     generatedPanelNormal: false, plumeLength: 2.2, boostedPlumeLength: 3.52,
-    roundEngineCores: true, materialTuning: 'per-instance rough metal; 0.85 rebel albedo',
+    roundEngineCores: true, materialTuning: 'neutral worn metal; distinct albedo, normal and roughness; preserved ship markings',
     trench: null, cinemaTrench: null, stationVisible: true,
   };
   scene.userData.worldGraphics = graphics;
@@ -398,10 +404,10 @@ export function createWorld(scene) {
     if (disposed) { texture.dispose(); return; }
     for (const copy of textureCopies) { copy.image = texture.image; copy.needsUpdate = true; }
     const normal = panelNormalTexture(texture.image);
-    for (const [material, repeat] of [[floorMaterial, floorTexture.repeat], [wallMaterial, wallTexture.repeat], [panelMaterial, panelTexture.repeat]]) {
-      material.normalMap = material === panelMaterial ? normal : normal.clone();
+    for (const [index, [material, repeat]] of [[floorMaterial, floorTexture.repeat], [wallMaterial, wallTexture.repeat]].entries()) {
+      material.normalMap = index === 0 ? normal : normal.clone();
       material.normalMap.repeat.copy(repeat);
-      material.normalScale.setScalar(material === floorMaterial ? 0.45 : 0.65);
+      material.normalScale.setScalar(material === floorMaterial ? 0.32 : 0.28);
       material.needsUpdate = true;
     }
     graphics.generatedPanelNormal = true;
@@ -416,8 +422,9 @@ export function createWorld(scene) {
   wallTexture.repeat.set(48, 1.6);
   textureCopies.push(floorTexture, wallTexture);
   const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x73818b, map: floorTexture, roughness: 0.88, metalness: 0.38 });
-  const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x929ba2, map: wallTexture, roughness: 0.82, metalness: 0.4 });
-  const panelMaterial = new THREE.MeshStandardMaterial({ color: 0x8e989f, map: panelTexture, roughness: 0.8, metalness: 0.42 });
+  const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x87939d, map: wallTexture, roughness: 0.92, metalness: 0.25 });
+  const trenchMetal = makeTrenchMetalTextures();
+  const panelMaterial = new THREE.MeshStandardMaterial({ color: 0xb2b8ba, map: trenchMetal.color, normalMap: trenchMetal.normal, normalScale: new THREE.Vector2(.34, .34), roughnessMap: trenchMetal.roughness, roughness: 0.94, metalness: 0.36, envMapIntensity: .65 });
   const deck = new THREE.Mesh(new THREE.PlaneGeometry(22000, 22000), floorMaterial);
   deck.rotation.x = -Math.PI / 2;
   deck.position.y = -150;

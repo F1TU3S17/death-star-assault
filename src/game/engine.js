@@ -481,7 +481,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       }
     }
     return {
-      mode, phase: active ? state.phase : 'menu', shipId: selectedShipId, camera: cameraMode,
+      mode, phase: active ? state.phase : 'menu', shipId: selectedShipId, camera: cameraMode, graphicsQuality: renderPipeline.inspect().quality,
       reticle: { x: reticlePoint.x * 0.5 + 0.5, y: 0.5 - reticlePoint.y * 0.5 },
       health: Math.round(hull / stats.hull * 100), shields: Math.round(shields / stats.shield * 100),
       speed: Math.round(speed), maxSpeed: stats.boostSpeed * getPowerProfile(powerMode).boost,
@@ -1017,13 +1017,17 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       cockpit.visible = true;
       shipMesh.visible = false;
     } else {
-      const chaseDistance = camera.aspect < 1 ? 24 / camera.aspect : 24;
+      const chaseDistance = camera.aspect < 1 ? 25.5 / camera.aspect : 25.5;
       const desired = player.position.clone().addScaledVector(forward, -chaseDistance).addScaledVector(up, 6.5);
       if (snapChaseCamera || camera.position.distanceToSquared(player.position) < 16 * 16) {
         camera.position.copy(desired);
         snapChaseCamera = false;
       } else {
         camera.position.lerp(desired, 1 - Math.exp(-dt * 8));
+        // Keep the detailed ship the same size while accelerating.
+        const offset = camera.position.clone().sub(player.position);
+        const radius = Math.hypot(chaseDistance, 6.5);
+        if (offset.lengthSq() > radius * radius) camera.position.copy(player.position).add(offset.setLength(radius));
         // Abrupt collision/route corrections must never pull the camera through the hull.
         if (camera.position.distanceToSquared(player.position) < 16 * 16) camera.position.copy(desired);
       }
@@ -1336,6 +1340,12 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   const api = {
     start, pause, resume, restart: () => start({ shipId: sortieShipId }), setCamera, setPowerMode, repair, requestSupport, toggleSfoils, selectWeapon, cycleWeapon, reloadWeapon, useAbility, submitQte,
     getSnapshot,
+    setGraphicsQuality(value) {
+      if (!['hd', 'performance'].includes(value)) return false;
+      renderPipeline.setQuality(value);
+      emitSnapshot();
+      return true;
+    },
     setMuted(value) { const result = audio.setMuted(value); emitSnapshot(); return result; },
     selectShip(id) { if (mode === 'menu') { replaceShip(id); emitSnapshot(); } },
     previewShip(id) { if (mode === 'menu') { replaceShip(id); emitSnapshot(); } },

@@ -1,6 +1,7 @@
 import './style.css';
 import { createGame } from './game/engine.js';
 import { SHIPS, MISSIONS, EPISODES } from './game/data.js';
+import { shieldIcon, hullIcon, chevronIcon, weaponIcon } from './hud-icons.js';
 
 const root = document.querySelector('#app');
 const episode = EPISODES.episode4 || Object.values(EPISODES)[0];
@@ -40,10 +41,10 @@ root.innerHTML = `
     <div class="reticle" id="reticle" aria-hidden="true"><i></i><span></span><b>·</b></div>
     <div class="target-bracket" id="target" hidden aria-hidden="true"><span id="target-distance"></span></div>
     <div class="world-markers" id="world-markers" aria-hidden="true"></div>
-    <div class="flight-telemetry"><div class="telemetry-heading"><span id="flight-ship">КРАСНЫЙ ПЯТЬ</span><span id="camera-label">ВНЕШНЯЯ КАМЕРА</span></div><div class="meter-row blue"><span>◈</span><div><label>ЩИТЫ <b id="shield-value">100</b></label><div class="meter"><i id="shield-bar"></i></div></div></div><div class="meter-row amber"><span>⬡</span><div><label>КОРПУС <b id="hull-value">100</b></label><div class="meter"><i id="hull-bar"></i></div></div></div><div class="flight-readings"><div><strong id="speed-value">0</strong><span>СКОРОСТЬ</span></div><div class="heat-reading"><span>НАГРЕВ ОРУДИЙ</span><div class="meter"><i id="heat-bar"></i></div></div></div><button class="ability-button" id="ability"><kbd>F</kbd><span id="flight-ability">Фокус щитов</span><b id="ability-cooldown">ГОТОВО</b></button></div>
+    <div class="flight-telemetry"><div class="telemetry-heading"><span id="flight-ship">КРАСНЫЙ ПЯТЬ</span><span id="camera-label">ВНЕШНЯЯ КАМЕРА</span></div><div class="meter-row blue"><span>${shieldIcon}</span><div><label>ЩИТЫ <b id="shield-value">100</b></label><div class="meter"><i id="shield-bar"></i></div></div></div><div class="meter-row amber"><span>${hullIcon}</span><div><label>КОРПУС <b id="hull-value">100</b></label><div class="meter"><i id="hull-bar"></i></div></div></div><div class="flight-readings"><div><strong id="speed-value">0</strong><span>СКОРОСТЬ</span></div><div class="heat-reading"><span>НАГРЕВ ОРУДИЙ</span><div class="meter"><i id="heat-bar"></i></div></div></div><button class="ability-button" id="ability"><kbd>F</kbd><span id="flight-ability">Фокус щитов</span><b id="ability-cooldown">ГОТОВО</b></button></div>
     <aside class="squad-panel" id="squad-panel" hidden aria-label="Состояние ударной группы"><div class="label" id="squad-heading">ПРИКРЫТИЕ ЭСКАДРИЛЬИ</div><div id="allies-list"></div><p id="escort-hint"></p></aside>
     <aside class="side-objectives" id="side-objectives" hidden aria-label="Дополнительные задания"></aside>
-    <div class="weapon-panel" id="weapon-panel"><div class="weapon-heading"><span>ВООРУЖЕНИЕ</span><b id="weapon-lock">ЛАЗЕРЫ ГОТОВЫ</b></div><div class="weapon-selector"><button id="weapon-prev" aria-label="Предыдущее оружие">←</button><div><strong id="weapon-name">Лазерные пушки</strong><span id="weapon-ammo">БОЕКОМПЛЕКТ ∞</span></div><button id="weapon-next" aria-label="Следующее оружие">→</button></div><div id="weapon-slots" class="weapon-slots"></div><button id="weapon-reload" class="weapon-reload" hidden><kbd>R</kbd> ПЕРЕЗАРЯДИТЬ ПУСКОВЫЕ</button></div>
+    <div class="weapon-panel" id="weapon-panel" aria-label="Вооружение и боекомплект"><div class="weapon-heading"><span>ВООРУЖЕНИЕ</span><b id="weapon-lock">ЛАЗЕРЫ ГОТОВЫ</b></div><div class="weapon-selector"><button id="weapon-prev" aria-label="Предыдущее оружие">${chevronIcon('left')}</button><span class="weapon-silhouette" id="weapon-icon" aria-hidden="true">${weaponIcon('laser')}</span><div><strong id="weapon-name">Лазерные пушки</strong><span id="weapon-ammo">БОЕКОМПЛЕКТ ∞</span></div><button id="weapon-next" aria-label="Следующее оружие">${chevronIcon('right')}</button></div><div class="weapon-condition"><span id="weapon-state-label">НАГРЕВ</span><b id="weapon-state-value">0%</b></div><div class="weapon-state-track"><i id="weapon-state-bar"></i></div><div id="weapon-munitions" class="weapon-munitions" aria-hidden="true"></div><div id="weapon-slots" class="weapon-slots" aria-label="Выбор оружия"></div><button id="weapon-reload" class="weapon-reload" hidden><kbd>R</kbd> ПЕРЕЗАРЯДИТЬ ПУСКОВЫЕ</button></div>
     <details class="tactics-panel" id="tactics"><summary>БОРТОВЫЕ СИСТЕМЫ</summary><div class="power-controls" aria-label="Распределение энергии">${[['engines','1','ТЯГА'],['weapons','2','ОРУДИЯ'],['shields','3','ЩИТЫ'],['balanced','4','БАЛАНС']].map(([id,key,label]) => `<button data-power="${id}" aria-pressed="${id === 'balanced'}"><kbd>${key}</kbd>${label}</button>`).join('')}</div><p id="power-description"></p><button id="repair"><kbd>V</kbd><span>АСТРОДРОИД</span><b id="repair-status"></b></button><button id="support"><kbd>T</kbd><span>ВЫЗВАТЬ ВЕДОМЫХ</span><b id="support-status"></b></button><button id="sfoils"><kbd>X</kbd><span>S-FOILS</span><b id="sfoils-status"></b></button></details>
     <div class="radio-panel"><div class="radio-message" id="radio"><span class="radio-avatar" id="radio-avatar" role="img" aria-label="Генерал Додонна"></span><strong id="radio-speaker">УПРАВЛЕНИЕ ЯВИНА</strong><p id="radio-text">Все группы, приготовиться к атаке.</p></div><div class="key-hints"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> КУРС</span><span><kbd>←</kbd><kbd>→</kbd> ОРУЖИЕ</span><span><kbd>SHIFT</kbd> УСКОРЕНИЕ</span><span><kbd>SPACE</kbd> ОГОНЬ</span></div></div>
     <div class="radar-panel"><div class="radar"><span class="radar-n">N</span><div class="radar-cross"></div><div class="radar-rings"></div><div id="radar-dots"></div><span class="radar-player">▲</span></div><div class="radar-caption"><span>СКАНЕР ЦЕЛЕЙ</span><b id="kills">0 ЦЕЛЕЙ</b></div></div>
@@ -52,7 +53,7 @@ root.innerHTML = `
   <section class="qte-panel" id="qte" hidden aria-label="Прицеливание торпед"><span class="eyebrow">КРАСНЫЙ ПЯТЬ / РУЧНОЕ НАВЕДЕНИЕ</span><h2>Доверься Силе</h2><p id="qte-label"></p><button id="qte-key" aria-label="Выполнить действие"></button><div class="qte-track"><i id="qte-time"></i></div><span id="qte-step"></span></section>
   <div class="cinematic-caption" id="cinematic" hidden><span>ЭПИЗОД IV</span><h2>Один выстрел меняет всё.</h2><p>Красный Пять · торпеды выпущены</p></div>
   <div class="toast" id="toast" role="status" hidden></div>
-  <section class="overlay" id="pause-overlay" hidden aria-label="Пауза"><div class="modal"><span class="eyebrow">ОПЕРАЦИЯ ПРИОСТАНОВЛЕНА</span><h2>Держим позицию.</h2><p>Эскадрилья ждёт вашего возвращения.</p><button class="launch" id="resume">ПРОДОЛЖИТЬ <span>↗</span></button><button class="secondary" data-help>Управление</button><button class="secondary" id="restart">Начать вылет заново</button><button class="text-button" id="back-menu">В главный ангар</button></div></section>
+  <section class="overlay" id="pause-overlay" hidden aria-label="Пауза"><div class="modal"><span class="eyebrow">ОПЕРАЦИЯ ПРИОСТАНОВЛЕНА</span><h2>Держим позицию.</h2><p>Эскадрилья ждёт вашего возвращения.</p><button class="launch" id="resume">ПРОДОЛЖИТЬ <span>↗</span></button><label class="graphics-setting" for="graphics-quality"><span>КАЧЕСТВО ГРАФИКИ</span><select id="graphics-quality"><option value="hd">HD · ЧЁТКОЕ ИЗОБРАЖЕНИЕ</option><option value="performance">ПРОИЗВОДИТЕЛЬНОСТЬ</option></select></label><button class="secondary" data-help>Управление</button><button class="secondary" id="restart">Начать вылет заново</button><button class="text-button" id="back-menu">В главный ангар</button></div></section>
   <section class="overlay" id="result-overlay" hidden aria-label="Результат операции"><div class="modal result"><span class="eyebrow" id="result-eyebrow"></span><h2 id="result-title"></h2><p id="result-description"></p><div class="result-stats"><div><span>ВРЕМЯ ВЫЛЕТА</span><strong id="result-time"></strong></div><div><span>СБИТЫЕ ЦЕЛИ</span><strong id="result-kills"></strong></div><div><span>БОНУС ЗА ЦЕЛИ</span><strong id="result-bonus">0</strong></div><div><span>ДОП. ЦЕЛИ</span><strong id="result-objectives">0 / 0</strong></div></div><button class="launch" id="replay">ПОВТОРИТЬ ВЫЛЕТ <span>↗</span></button><button class="secondary" id="result-menu">Вернуться в ангар</button></div></section>
   <dialog id="help" class="help-dialog"><button class="close-help" id="close-help" aria-label="Закрыть управление">×</button><span class="eyebrow">ПАМЯТКА ПИЛОТА</span><h2>Управление кораблём</h2><div class="help-grid"><span>Курс / тангаж и рыскание</span><kbd>W A S D</kbd><span>Предыдущее / следующее оружие</span><span><kbd>← ↓</kbd> / <kbd>→ ↑</kbd></span><span>Перезарядить торпедные пусковые</span><kbd>R</kbd><span>Энергия: тяга / оружие / щиты / баланс</span><kbd>1 / 2 / 3 / 4</kbd><span>Ремонт астродроидом</span><kbd>V</kbd><span>Вызвать двух ведомых</span><kbd>T</kbd><span>Крылья X-wing: крейсер / атака</span><kbd>X</kbd><span>Крен</span><span><kbd>Q</kbd> / <kbd>E</kbd></span><span>Ускорение</span><kbd>SHIFT</kbd><span>Торможение / малая тяга</span><kbd>CTRL</kbd><span>Огонь выбранным оружием</span><span><kbd>ПРОБЕЛ</kbd> / ЛКМ</span><span>Оборудование корабля</span><kbd>F</kbd><span>Кабина / внешняя камера</span><kbd>C</kbd><span>Пауза</span><kbd>ESC</kbd></div><p>1–4 перераспределяют энергию: усиление одной системы имеет цену. V восстанавливает 25 единиц корпуса за 3 секунды (два заряда); попадание прерывает ремонт, огонь на время отключён. T вызывает двух ведомых на 10 секунд (три вызова). X складывает или раскрывает S-foils; ускорение сохраняет боевое положение. При сложенных или движущихся крыльях оружие заблокировано: раскройте их клавишей X. Держите цель в пределах круга прицела, чтобы использовать помощь наведения. Ctrl снижает тягу для точного боя. Стрелки переключают лазеры, протонные торпеды и ионные пушки Y-wing. R перезаряжает торпедные пусковые за 4,5 секунды из конечного запаса. Рамка захвата подтверждает цель. При сопровождении держитесь рядом с союзниками и защищайте их от TIE. Красная рамка отмечает ближайшую угрозу. В траншее проходите светящиеся створы. Для пуска торпед нажимайте указанную клавишу до окончания отсчёта.</p><p class="help-note">При сканировании уменьшите тягу клавишей Ctrl и держите синий сенсор в прицеле 3 секунды. Маркер Золотой пары подсвечен янтарным. В траншее следите за янтарным предупреждением вентиля и стреляйте по регулятору охлаждения.</p><p class="help-note">X-wing и Y-wing участвовали в битве при Явине. A-wing появится в будущих эпизодах. Характеристики и способности адаптированы для аркадной игры.</p><button class="launch" id="help-done">ПОНЯТНО <span>↗</span></button></dialog>
   <div class="fatal overlay" id="fatal" hidden><div class="modal"><span class="eyebrow">НЕТ СВЯЗИ С АНГАРОМ</span><h2>Не удалось запустить 3D.</h2><p id="fatal-message">Для игры нужен браузер с поддержкой WebGL2. Включите аппаратное ускорение и обновите страницу.</p><button class="launch" onclick="location.reload()">ПОВТОРИТЬ <span>↗</span></button></div></div>
@@ -227,6 +228,7 @@ function render(state) {
   $('cinematic').hidden = mode !== 'cinematic';
   $('reticle').hidden = mode === 'cinematic' || mode === 'qte';
   document.body.dataset.mode = mode;
+  $('graphics-quality').value = state.graphicsQuality || 'hd';
   muted = Boolean(state.muted);
   $('sound').textContent = muted ? 'ЗВУК ○' : 'ЗВУК ◉';
   $('sound').setAttribute('aria-label', muted ? 'Включить звук' : 'Выключить звук');
@@ -282,21 +284,52 @@ function render(state) {
   $('sfoils-status').textContent = `${state.sfoils?.mode === 'auto' ? 'АВТО · ' : ''}${(state.sfoils?.openness ?? 1) > .8 ? 'АТАКА' : (state.sfoils?.openness ?? 1) < .2 ? 'КРЕЙСЕР' : 'ПЕРЕХОД'}`;
   const weapon = state.weapon;
   if (weapon) {
+    const panel = $('weapon-panel');
+    const config = ship.weapons?.find(entry => entry.id === weapon.id);
+    const capacity = weapon.capacity ?? config?.ammo ?? 0;
+    const finiteAmmo = weapon.ammo !== null;
+    const wingsLocked = state.sfoils?.available && (state.sfoils.mode === 'closed' || state.sfoils.openness < 1);
+    panel.dataset.weapon = weapon.id;
+    panel.dataset.state = wingsLocked ? 'blocked' : weapon.reloading ? 'reloading' : weapon.ammo === 0 ? 'empty' : heat >= 85 ? 'overheated' : weapon.cooldown > 0 ? 'cooldown' : 'ready';
+    if ($('weapon-icon').dataset.weapon !== weapon.id) {
+      $('weapon-icon').dataset.weapon = weapon.id;
+      $('weapon-icon').innerHTML = weaponIcon(weapon.id);
+    }
     $('weapon-name').textContent = weapon.name;
     $('weapon-ammo').textContent = weapon.ammo === null ? 'БОЕКОМПЛЕКТ ∞' : `ПУСКОВЫЕ ${weapon.ammo} · ЗАПАС ${weapon.reserve ?? 0}`;
     $('weapon-lock').textContent = state.sfoils?.available && (state.sfoils.mode === 'closed' || state.sfoils.openness < 1) ? 'S-FOILS ЗАКРЫТЫ' : weapon.reloading ? `ЗАРЯЖАЕМ ${Math.max(0, weapon.reloadRemaining).toFixed(1)} С` : weapon.cooldown > 0 ? `ГОТОВНОСТЬ ${weapon.cooldown.toFixed(1)} С` : weapon.locked ? 'ЦЕЛЬ ЗАХВАЧЕНА' : weapon.id === 'proton-torpedo' ? 'НУЖЕН ЗАХВАТ ЦЕЛИ' : 'ОРУДИЯ ГОТОВЫ';
     $('weapon-reload').hidden = weapon.id !== 'proton-torpedo';
-    const capacity = weapon.capacity ?? ship.weapons?.find(entry => entry.id === weapon.id)?.ammo ?? 0;
     $('weapon-reload').disabled = Boolean(weapon.reloading) || !(weapon.reserve > 0) || weapon.ammo >= capacity;
     $('weapon-reload').innerHTML = weapon.reloading ? `<kbd>R</kbd> ЗАРЯЖАЕМ · ${Math.max(0, weapon.reloadRemaining).toFixed(1)} С` : '<kbd>R</kbd> ПЕРЕЗАРЯДИТЬ ПУСКОВЫЕ';
     $('weapon-panel').classList.toggle('locked', Boolean(weapon.locked));
     $('weapon-panel').classList.toggle('empty', weapon.ammo === 0);
+    const reloadProgress = 1 - Math.max(0, weapon.reloadRemaining || 0) / Math.max(.1, config?.reloadDuration || 4.5);
+    const readiness = 1 - Math.max(0, weapon.cooldown || 0) / Math.max(.1, config?.cooldown || 1);
+    $('weapon-state-label').textContent = weapon.reloading ? 'ПЕРЕЗАРЯДКА' : finiteAmmo ? 'ПУСКОВЫЕ' : 'НАГРЕВ';
+    $('weapon-state-value').textContent = weapon.reloading ? `${Math.max(0, weapon.reloadRemaining).toFixed(1)} С` : finiteAmmo ? `${String(weapon.ammo).padStart(2, '0')} / ${String(capacity).padStart(2, '0')}` : `${Math.round(clamp(heat))}%`;
+    $('weapon-state-bar').style.width = `${clamp((weapon.reloading ? reloadProgress : finiteAmmo ? readiness : heat / 100) * 100)}%`;
+    $('weapon-munitions').hidden = !finiteAmmo;
+    if (finiteAmmo) {
+      const munitionSignature = `${weapon.id}:${capacity}`;
+      if ($('weapon-munitions').dataset.signature !== munitionSignature) {
+        $('weapon-munitions').dataset.signature = munitionSignature;
+        $('weapon-munitions').replaceChildren(...Array.from({ length: Math.min(24, capacity) }, () => document.createElement('i')));
+      }
+      Array.from($('weapon-munitions').children).forEach((cell, index) => cell.classList.toggle('loaded', index < weapon.ammo));
+    }
     const signature = (state.weapons || []).map(entry => `${entry.id}:${entry.ammo}:${entry.selected}`).join('|');
     if ($('weapon-slots').dataset.signature !== signature) {
       $('weapon-slots').dataset.signature = signature;
       $('weapon-slots').replaceChildren(...(state.weapons || []).map(entry => {
         const button = document.createElement('button');
-        button.textContent = entry.id === 'proton-torpedo' ? `ТОРПЕДЫ · ${entry.ammo}` : entry.id === 'ion-cannon' ? 'ИОНЫ' : entry.id === 'linked-laser' ? 'ЗАЛП' : 'ЛАЗЕРЫ';
+        button.dataset.weapon = entry.id;
+        const icon = document.createElement('span');
+        icon.className = 'weapon-slot-icon';
+        icon.innerHTML = weaponIcon(entry.id);
+        const label = document.createElement('span');
+        label.className = 'weapon-slot-label';
+        label.textContent = entry.id === 'proton-torpedo' ? `ТОРПЕДЫ · ${entry.ammo}` : entry.id === 'ion-cannon' ? 'ИОНЫ' : entry.id === 'linked-laser' ? 'ЗАЛП' : 'ЛАЗЕРЫ';
+        button.append(icon, label);
         button.classList.toggle('selected', entry.selected);
         button.setAttribute('aria-pressed', String(entry.selected));
         button.setAttribute('aria-label', entry.name);
@@ -404,6 +437,7 @@ $('start').addEventListener('click', () => {
 });
 $('pause').addEventListener('click', () => game?.pause());
 $('resume').addEventListener('click', () => { $('resume').blur(); game?.resume(); });
+$('graphics-quality').addEventListener('change', () => { game?.setGraphicsQuality?.($('graphics-quality').value); $('graphics-quality').blur(); });
 $('restart').addEventListener('click', () => { $('restart').blur(); game?.restart(); });
 $('replay').addEventListener('click', () => { $('replay').blur(); game?.restart(); });
 $('back-menu').addEventListener('click', returnToMenu);

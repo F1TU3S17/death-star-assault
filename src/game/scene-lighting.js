@@ -4,13 +4,13 @@ const ACTIVE_MODES = new Set(['playing', 'qte', 'cinematic']);
 
 function createProceduralEnvironment() {
   const environment = new THREE.Scene();
-  environment.background = new THREE.Color(0x101a28);
+  environment.background = new THREE.Color(0x28323c);
   const geometry = new THREE.PlaneGeometry(1, 1);
   const cards = [
-    { position: [-18, 7, 20], size: [32, 12], color: [0.8, 1.28, 1.92] },
-    { position: [8, 18, -16], size: [27, 5], color: [1.36, 0.76, 0.36] },
-    { position: [21, -7, -10], size: [30, 9], color: [0.48, 0.96, 1.6] },
-    { position: [-8, -19, -12], size: [24, 4], color: [1, 1.12, 1.28] },
+    { position: [-18, 7, 20], size: [32, 12], color: [1.15, 1.31, 1.5] },
+    { position: [8, 18, -16], size: [27, 5], color: [1.38, 1.30, 1.14] },
+    { position: [21, -7, -10], size: [30, 9], color: [.72, .89, 1.1] },
+    { position: [-8, -19, -12], size: [24, 4], color: [.70, .78, .86] },
   ];
 
   for (const card of cards) {
@@ -63,14 +63,14 @@ export function createSceneLighting(renderer, scene, camera) {
   disposeEnvironmentScene(environment);
   const previousEnvironment = scene.environment;
   const previousEnvironmentIntensity = scene.environmentIntensity;
-  const environmentIntensity = 0.42;
+  const environmentIntensity = 0.58;
   scene.environment = environmentTarget.texture;
   scene.environmentIntensity = environmentIntensity;
 
   // One unshadowed, finite-range source adds readable local response without
   // expanding the directional shadow map or adding per-frame light objects.
-  const fillIntensity = 350;
-  const fillLight = new THREE.PointLight(0xc7dcf1, 0, 80, 2);
+  const fillIntensity = 420;
+  const fillLight = new THREE.PointLight(0xd6e2eb, 0, 105, 2);
   fillLight.name = 'Trench player fill';
   fillLight.castShadow = false;
   scene.add(fillLight);
@@ -92,8 +92,8 @@ export function createSceneLighting(renderer, scene, camera) {
     forward.set(0, 0, -1).applyQuaternion(player.quaternion);
     up.set(0, 1, 0).applyQuaternion(player.quaternion);
     fillLight.position.copy(player.position)
-      .addScaledVector(forward, -12)
-      .addScaledVector(up, 10);
+      .addScaledVector(forward, -10)
+      .addScaledVector(up, 12);
 
     // In cockpit view the camera is near the pilot; a small extra lift keeps
     // the local fill outside the cockpit shell while retaining player tracking.

@@ -2116,3 +2116,314 @@ body[data-mode=qte]::after { bottom: 0; }
   .result-stats span { font-size: 7px; letter-spacing: .6px; }
   .result-stats strong { font-size: 20px; }
 }
+
+/* Cockpit overlays: open rails, restrained light, and silhouette-first armament. */
+.hud {
+  --hud-white: #e7ecee;
+  --hud-muted: #a0b0b9;
+  --hud-cyan: #a0d3e4;
+  --hud-gold: #ecc17b;
+  --hud-line: #c2d0d233;
+  --hud-veil: #050a10b8;
+  color: var(--hud-white);
+  text-shadow: 0 1px 5px #000, 0 0 16px #0008;
+}
+.mission-panel { top: 29px; left: 32px; max-width: min(520px, 42%); }
+.mission-title { gap: 11px; font-size: 17px; font-weight: 400; letter-spacing: 3.1px; color: var(--hud-gold); }
+.mission-title > i { width: 27px; height: 2px; background: var(--hud-gold); }
+.mission-panel p { gap: 10px; margin-top: 10px; font-size: 13px; font-weight: 400; line-height: 1.45; letter-spacing: .3px; }
+.mission-panel p > span:first-child { color: var(--hud-gold); font-size: 20px; }
+.mission-panel b { color: var(--hud-white); font-size: 12px; margin-left: 7px; font-variant-numeric: tabular-nums; }
+.mission-track { height: 1px; width: 176px; margin: 10px 0 0 29px; background: var(--hud-line); }
+.mission-track > i { background: var(--hud-gold); }
+.stages { top: 30px; }
+.stages li { width: 35px; gap: 6px; font-size: 8px; color: #e7ecee73; }
+.stages li i { height: 9px; width: 9px; border-color: #dce5e78c; background: #050a1070; }
+.stages li:not(:last-child):after { top: 4px; left: 22px; width: 26px; background: #dce5e745; }
+.stages .current { color: var(--hud-gold); }
+.stages .current i, .stages .complete i { background: var(--hud-gold); border-color: var(--hud-gold); box-shadow: none; }
+.flight-actions { top: 27px; right: 32px; }
+.clock { font-size: 12px; letter-spacing: 2px; color: #dce5e7bc; font-variant-numeric: tabular-nums; }
+.flight-actions > div:last-child { gap: 7px; margin-top: 10px; }
+.flight-actions button { border: 0; border-bottom: 1px solid #c2d0d238; background: #050a105e; color: #dce5e7b8; padding: 7px 8px; font-size: 8px; font-weight: 400; letter-spacing: .7px; }
+.flight-actions button:hover { border-color: var(--hud-white); color: var(--hud-white); }
+.reticle { width: 100px; height: 100px; border-color: #ecc17b9c; opacity: .9; }
+.reticle i { left: 31px; width: 36px; }
+.reticle:before, .reticle:after, .reticle span { background: var(--hud-gold); }
+.reticle b { color: var(--hud-gold); }
+.target-bracket { opacity: .9; }
+.flight-telemetry { left: 32px; bottom: 31px; width: 246px; }
+.telemetry-heading { margin-bottom: 13px; font-size: 9px; letter-spacing: 1.6px; color: var(--hud-white); }
+.telemetry-heading > span:last-child { font-size: 7px; letter-spacing: .6px; color: #a0b0b978; }
+.meter-row { gap: 10px; margin: 11px 0; }
+.meter-row > span { width: 23px; height: 30px; flex: 0 0 23px; }
+.meter-row > span svg { display: block; width: 100%; height: 100%; }
+.meter-row label { font-size: 9px; font-weight: 400; letter-spacing: 2px; margin-bottom: 6px; color: var(--hud-white); }
+.meter-row label b { font-size: 12px; color: var(--hud-white); font-variant-numeric: tabular-nums; }
+.hud .blue { color: var(--hud-cyan); }
+.hud .amber { color: var(--hud-white); }
+.flight-telemetry .meter { height: 5px; border-radius: 0; background: #a0b0b926; }
+.flight-telemetry .meter > i { mask-image: repeating-linear-gradient(90deg,#000 0 21px,transparent 21px 23px); }
+.flight-telemetry #hull-bar { background: var(--hud-white); }
+.flight-readings { gap: 19px; margin: 12px 0 10px 33px; }
+.flight-readings > div:first-child { gap: 7px; }
+.flight-readings strong { min-width: 32px; font-size: 26px; font-family: Oswald,Impact,sans-serif; color: var(--hud-white); font-variant-numeric: tabular-nums; }
+.flight-readings span { font-size: 7px; color: var(--hud-muted); letter-spacing: 1px; }
+.flight-telemetry .heat-reading .meter { height: 2px; margin-top: 5px; color: var(--hud-gold); }
+.ability-button { border: 0; border-top: 1px solid var(--hud-line); background: linear-gradient(90deg,#050a108c,transparent); padding: 9px 0; gap: 9px; color: var(--hud-white); font-size: 10px; }
+.ability-button kbd { font-size: 8px; border-color: #e7ecee70; color: var(--hud-white); }
+.ability-button > b { font-size: 8px; color: var(--hud-gold); letter-spacing: .8px; }
+.ability-button:disabled { opacity: .65; }
+.radio-panel { bottom: 33px; width: min(39%, 540px); max-width: 540px; }
+.radio-message { grid-template-columns: 36px 1fr; gap: 3px 11px; min-height: 53px; padding: 8px 12px; border: 0; border-left: 1px solid #ecc17b80; background: linear-gradient(90deg,#050a10cf,#050a1099 85%,#050a1050); }
+.radio-avatar { width: 36px; height: 36px; border-color: #dce5e745; filter: saturate(.65); }
+.radio-message strong { color: var(--hud-gold); font-size: 9px; letter-spacing: 1.9px; }
+.radio-message p { font-size: 12px; line-height: 1.4; color: var(--hud-white); font-weight: 400; }
+.key-hints { gap: 13px; margin-top: 13px; font-size: 7px; color: #c8d0d4a6; letter-spacing: 1px; }
+.key-hints kbd { border-color: #dce5e750; font-size: 8px; padding: 2px 3px; }
+.radar-panel { right: 34px; bottom: 31px; width: 164px; }
+.radar { width: 164px; height: 164px; background: #050a104d; border: 1px solid #e7ecee99; box-shadow: 0 0 0 5px #050a1030, 0 0 0 6px #e7ecee20; }
+.radar-rings, .radar-rings:before { border-color: #c2d0d224; }
+.radar:before, .radar:after { background: #c2d0d230; }
+.radar-player { color: var(--hud-cyan); }
+.radar-n { top: -17px; font-size: 8px; }
+.radar-caption { margin-top: 12px; font-size: 7px; letter-spacing: 1.1px; color: var(--hud-muted); }
+.radar-caption b { color: var(--hud-white); font-size: 7px; }
+.weapon-panel { --weapon-accent: var(--hud-white); right: 32px; bottom: 239px; width: 275px; padding: 10px 0 0; border: 0; border-top: 1px solid #c2d0d24d; background: linear-gradient(270deg,#050a1066,transparent); }
+.weapon-heading { color: var(--hud-muted); align-items: center; font-size: 8px; letter-spacing: 1.6px; }
+.weapon-heading > span { white-space: nowrap; }
+.weapon-heading b { color: var(--weapon-accent); font-size: 7px; letter-spacing: .6px; text-align: right; line-height: 1.3; }
+.weapon-selector { display: grid; grid-template-columns: 22px 54px minmax(0,1fr) 22px; gap: 8px; margin: 13px 0 11px; }
+.weapon-selector > div { min-width: 0; }
+.weapon-selector strong { font-family: 'Roboto Condensed','Arial Narrow',Arial,sans-serif; font-size: 14px; line-height: 1.15; font-weight: 400; color: var(--hud-white); }
+.weapon-selector span { display: block; margin-top: 5px; color: var(--hud-muted); font-size: 8px; letter-spacing: .6px; line-height: 1.4; }
+.weapon-selector .weapon-silhouette { margin: 0; color: var(--weapon-accent); }
+.weapon-silhouette svg { display: block; width: 54px; height: 42px; }
+.weapon-selector > button { display: grid; place-items: center; height: 35px; padding: 0; border: 0; background: transparent; color: #e7ecee85; }
+.weapon-selector > button svg { width: 19px; height: 19px; }
+.weapon-selector > button:hover { color: var(--hud-gold); background: #ecc17b0b; }
+.weapon-condition { display: flex; align-items: center; justify-content: space-between; color: var(--hud-muted); font-size: 7px; letter-spacing: 1.4px; }
+.weapon-condition b { color: var(--weapon-accent); font-family: Oswald,Impact,sans-serif; font-size: 13px; font-weight: 400; letter-spacing: 1px; font-variant-numeric: tabular-nums; }
+.weapon-state-track { height: 3px; background: #a0b0b92b; margin-top: 6px; }
+.weapon-state-track i { display: block; height: 100%; width: 0; background: var(--weapon-accent); mask-image: repeating-linear-gradient(90deg,#000 0 12px,transparent 12px 15px); transition: width .1s linear; }
+.weapon-munitions { display: flex; gap: 4px; margin-top: 6px; }
+.weapon-munitions i { height: 8px; flex: 1; border: 1px solid #e7ecee4d; transform: skewX(-15deg); }
+.weapon-munitions i.loaded { border-color: var(--weapon-accent); background: var(--weapon-accent); }
+.weapon-slots { display: flex; gap: 8px; margin-top: 13px; }
+.weapon-slots button { position: relative; flex: 1; display: grid; justify-items: center; gap: 3px; padding: 8px 4px 6px; border: 0; border-bottom: 1px solid #e7ecee38; background: #050a1047; color: #a0b0b98c; font-size: 8px; letter-spacing: .6px; }
+.weapon-slot-icon { display: block; width: 43px; height: 29px; }
+.weapon-slot-icon svg { width: 100%; height: 100%; }
+.weapon-slot-label { display: block; font-size: 7px; white-space: nowrap; }
+.weapon-slots button.selected { color: var(--hud-white); border-color: var(--hud-gold); background: linear-gradient(0deg,#ecc17b17,transparent); }
+.weapon-slots button.selected:before { content: ''; position: absolute; left: 50%; top: -3px; width: 4px; height: 4px; background: var(--hud-gold); transform: translateX(-50%) rotate(45deg); }
+.weapon-slots button:hover { color: var(--hud-white); background: #e7ecee0d; }
+.weapon-reload { margin-top: 9px; padding: 8px 5px; border: 0; border-bottom: 1px solid #ecc17b66; background: #ecc17b0b; color: var(--hud-gold); font-size: 8px; letter-spacing: .8px; }
+.weapon-reload:disabled { opacity: .48; }
+.weapon-panel[data-weapon=ion-cannon] { --weapon-accent: var(--hud-cyan); }
+.weapon-panel[data-weapon=proton-torpedo], .weapon-panel.locked, .weapon-panel[data-state=reloading] { --weapon-accent: var(--hud-gold); }
+.weapon-panel[data-state=empty], .weapon-panel[data-state=overheated], .weapon-panel[data-state=blocked] { --weapon-accent: #ed8b79; }
+.weapon-panel.empty #weapon-ammo { color: #ed8b79; }
+.tactics-panel { top: 108px; right: 32px; width: 230px; padding: 9px 0; border: 0; border-top: 1px solid var(--hud-line); background: transparent; color: var(--hud-muted); z-index: 3; }
+.tactics-panel summary { list-style: none; position: relative; padding: 0 19px 0 0; color: #dce5e7ba; font-size: 8px; font-weight: 400; letter-spacing: 1.5px; }
+.tactics-panel summary::-webkit-details-marker { display: none; }
+.tactics-panel summary:focus:not(:focus-visible) { outline: none; }
+.tactics-panel summary:focus-visible { outline: 1px solid var(--hud-gold); outline-offset: 5px; border-radius: 0; }
+.tactics-panel summary:after { content: ''; position: absolute; right: 3px; top: 0; width: 6px; height: 6px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; transform: rotate(45deg); }
+.tactics-panel[open] { padding: 11px; background: #050a10ed; border: 1px solid #a0b0b94a; max-height: min(350px, 56vh); overflow-y: auto; }
+.tactics-panel[open] summary:after { top: 3px; transform: rotate(225deg); }
+.power-controls button { color: var(--hud-muted); border-color: var(--hud-line); font-size: 8px; }
+.power-controls button[aria-pressed=true] { color: var(--hud-white); border-color: #e7ecee99; background: #e7ecee10; }
+.tactics-panel > button { border: 0; border-top: 1px solid var(--hud-line); padding: 8px 0; font-size: 9px; background: transparent; }
+.tactics-panel > button b { color: var(--hud-gold); font-size: 8px; }
+#power-description { font-size: 9px; color: var(--hud-muted); }
+.squad-panel { top: 134px; left: 32px; width: 245px; border-left: 1px solid #a0d3e475; padding: 4px 12px 8px; background: linear-gradient(90deg,#050a1099,transparent); }
+.squad-panel .label { color: var(--hud-cyan); font-size: 8px; letter-spacing: 1.2px; }
+.ally-row { margin-top: 10px; font-size: 10px; gap: 5px 10px; }
+.ally-health { height: 2px; }
+#escort-hint { font-size: 8px; color: var(--hud-muted); line-height: 1.5; }
+.side-objectives { top: 134px; left: 32px; max-width: 290px; padding: 4px 11px 8px; font-size: 10px; border-color: #a0d3e44d; background: linear-gradient(90deg,#050a108c,transparent); }
+.side-objective-heading b, .side-objective-row small { font-size: 8px; }
+.world-marker { border-left: 0; border-bottom: 1px solid #a0d3e480; color: #b7e6f4; background: #050a1080; padding: 4px 6px; font-size: 8px; letter-spacing: 1px; }
+.toast { border: 0; border-left: 1px solid #ecc17b8c; background: #050a10d9; color: #e7ecee; font-size: 10px; font-weight: 400; letter-spacing: 1px; }
+.graphics-setting { display: grid; gap: 9px; margin: 20px 0 14px; text-align: left; }
+.graphics-setting > span { color: #a0b0b9; font-size: 9px; letter-spacing: 1.5px; }
+.graphics-setting select { width: 100%; padding: 10px 12px; font: 11px 'Roboto Condensed','Arial Narrow',Arial,sans-serif; letter-spacing: .7px; color: #e7ecee; background: #0b121b; border: 1px solid #a0b0b94d; border-radius: 0; cursor: pointer; }
+.graphics-setting select:focus-visible { outline: 1px solid #ecc17b; outline-offset: 3px; }
+@media(max-width:1100px) {
+  .mission-panel { left: 24px; max-width: 44%; }
+  .mission-title { font-size: 15px; letter-spacing: 2.2px; }
+  .mission-panel p { font-size: 12px; }
+  .stages { top: 111px; left: 24px; transform: none; }
+  .stages li { width: 28px; }
+  .stages li:not(:last-child):after { left: 18px; width: 20px; }
+  .flight-telemetry { left: 24px; width: 218px; }
+  .weapon-panel { right: 24px; width: 238px; bottom: 210px; }
+  .weapon-selector { grid-template-columns: 19px 45px minmax(0,1fr) 19px; gap: 6px; }
+  .weapon-silhouette svg { width: 45px; }
+  .weapon-selector strong { font-size: 13px; }
+  .tactics-panel { right: 24px; width: 216px; }
+  .radar-panel { right: 27px; width: 137px; }
+  .radar { width: 137px; height: 137px; }
+  .radio-panel { width: 40%; left: 51%; }
+  .radio-message p { font-size: 11px; }
+  .key-hints { gap: 7px; font-size: 6px; letter-spacing: .3px; }
+  .squad-panel, .side-objectives { top: 159px; left: 24px; width: 230px; }
+}
+@media(max-width:760px) {
+  .mission-panel { top: 19px; left: 16px; max-width: 62%; }
+  .mission-title { gap: 8px; font-size: 12px; letter-spacing: 1.5px; }
+  .mission-title > i { width: 16px; }
+  .mission-panel p { margin-top: 7px; gap: 6px; font-size: 10px; line-height: 1.4; }
+  .mission-panel p > span:first-child { font-size: 16px; }
+  .mission-panel b { margin-left: 2px; font-size: 10px; }
+  .mission-track { margin: 8px 0 0 21px; width: 108px; }
+  .stages { top: 112px; left: 16px; }
+  .stages li { width: 25px; font-size: 7px; gap: 5px; }
+  .stages li i { width: 7px; height: 7px; }
+  .stages li:not(:last-child):after { top: 3px; left: 16px; width: 18px; }
+  .flight-actions { top: 18px; right: 16px; }
+  .clock { font-size: 9px; letter-spacing: 1px; }
+  .flight-actions > div:last-child { gap: 5px; margin-top: 9px; }
+  .flight-actions button { font-size: 7px; padding: 7px 5px; }
+  .tactics-panel { top: 147px; right: 16px; width: 143px; padding: 9px 0; }
+  .tactics-panel summary { font-size: 7px; letter-spacing: .7px; padding-right: 13px; }
+  .tactics-panel[open] { width: 164px; max-height: 31vh; padding: 9px; }
+  .tactics-panel > button { font-size: 8px; padding: 7px 0; }
+  .tactics-panel > button b { font-size: 7px; }
+  .power-controls { grid-template-columns: repeat(2,1fr); margin-top: 10px; }
+  #power-description { font-size: 8px; }
+  .flight-telemetry { left: 16px; bottom: 21px; width: 150px; }
+  .telemetry-heading { font-size: 8px; letter-spacing: .9px; margin-bottom: 9px; }
+  .meter-row { gap: 6px; margin: 9px 0; }
+  .meter-row > span { width: 18px; height: 24px; flex-basis: 18px; }
+  .meter-row label { font-size: 8px; letter-spacing: 1.3px; margin-bottom: 5px; }
+  .meter-row label b { font-size: 10px; }
+  .flight-telemetry .meter { height: 4px; }
+  .flight-telemetry .meter > i { mask-image: repeating-linear-gradient(90deg,#000 0 12px,transparent 12px 14px); }
+  .flight-readings { margin: 10px 0 8px 24px; gap: 10px; }
+  .flight-readings strong { font-size: 23px; min-width: 25px; }
+  .flight-readings span { font-size: 6px; letter-spacing: .4px; }
+  .ability-button { font-size: 8px; gap: 6px; padding: 8px 0; }
+  .ability-button > b { font-size: 7px; letter-spacing: 0; }
+  .ability-button kbd { font-size: 7px; padding: 2px 3px; }
+  .weapon-panel { right: 16px; bottom: 148px; width: 180px; padding-top: 8px; }
+  .weapon-heading { font-size: 6px; letter-spacing: .8px; gap: 4px; }
+  .weapon-heading b { font-size: 6px; letter-spacing: .2px; }
+  .weapon-selector { grid-template-columns: 16px 34px minmax(0,1fr) 16px; gap: 4px; margin: 10px 0 9px; }
+  .weapon-selector strong { font-size: 11px; line-height: 1.15; }
+  .weapon-selector span { font-size: 6px; letter-spacing: .3px; margin-top: 4px; }
+  .weapon-selector .weapon-silhouette { margin-top: 0; }
+  .weapon-silhouette svg { width: 34px; height: 32px; }
+  .weapon-selector > button { height: 34px; }
+  .weapon-selector > button svg { width: 16px; }
+  .weapon-condition { font-size: 6px; letter-spacing: .8px; }
+  .weapon-condition b { font-size: 11px; }
+  .weapon-state-track { margin-top: 4px; height: 2px; }
+  .weapon-slots { gap: 5px; margin-top: 10px; }
+  .weapon-slots button { padding: 5px 2px; gap: 2px; }
+  .weapon-slot-icon { width: 33px; height: 23px; }
+  .weapon-slot-label { font-size: 6px; letter-spacing: .1px; }
+  .weapon-munitions { gap: 3px; margin-top: 5px; }
+  .weapon-munitions i { height: 6px; }
+  .weapon-reload { padding: 6px 2px; font-size: 7px; letter-spacing: .2px; margin-top: 7px; }
+  .weapon-reload kbd { font-size: 7px; }
+  .radar-panel { right: 22px; bottom: 24px; width: 94px; }
+  .radar { width: 94px; height: 94px; box-shadow: 0 0 0 3px #050a1030,0 0 0 4px #e7ecee20; }
+  .radar-n { top: -14px; font-size: 7px; }
+  .radar-caption { margin-top: 10px; font-size: 6px; letter-spacing: .4px; }
+  .radar-caption b { font-size: 6px; }
+  .radio-panel { bottom: 338px; left: 50%; width: calc(100% - 32px); max-width: 430px; }
+  .radio-message { grid-template-columns: 30px 1fr; min-height: 45px; gap: 3px 8px; padding: 7px 9px; }
+  .radio-avatar { width: 30px; height: 30px; }
+  .radio-message strong { font-size: 8px; letter-spacing: 1px; }
+  .radio-message p { font-size: 10px; line-height: 1.35; }
+  .key-hints { display: none; }
+  .squad-panel { top: 154px; left: 16px; width: min(47%,200px); padding: 4px 8px 6px; }
+  .squad-panel .label { font-size: 7px; letter-spacing: .6px; }
+  .ally-row { font-size: 9px; margin-top: 8px; }
+  #escort-hint { font-size: 7px; }
+  .side-objectives { top: 154px; left: 16px; max-width: 47%; width: 200px; padding: 4px 7px 6px; font-size: 9px; }
+  .side-objective-heading { flex-wrap: wrap; gap: 2px 6px; }
+  .side-objective-heading b, .side-objective-row small { font-size: 7px; }
+  .toast { top: 150px; font-size: 8px; padding: 10px; width: 85%; line-height: 1.5; }
+}
+@media(pointer:coarse) {
+  .touch-controls { bottom: 16px; gap: 10px; }
+  .touch-controls > button { height: 47px; background: #050a10b0; color: #e7ecee; border-color: #c2d0d266; font-size: 9px; }
+  .touch-direction button { background: #050a10b0; border-color: #c2d0d24d; }
+  .flight-telemetry { bottom: 109px; }
+  .radar-panel { bottom: 110px; }
+  .weapon-panel { bottom: 236px; }
+  .radio-panel { bottom: 430px; }
+}
+@media(max-width:760px) and (pointer:coarse) and (min-height:551px) {
+  /* Equipment stays below the portrait fighter, above a separate scanner/touch lane. */
+  .weapon-panel { bottom: 185px; padding-top: 3px; }
+  .weapon-heading { line-height: 1.2; }
+  .weapon-selector { grid-template-columns: 16px 28px minmax(0,1fr) 16px; margin: 3px 0 2px; }
+  .weapon-selector strong { font-size: 10px; line-height: 1.1; }
+  .weapon-selector span { margin-top: 2px; line-height: 1.1; }
+  .weapon-silhouette svg { width: 28px; height: 22px; }
+  .weapon-selector > button { height: 24px; }
+  .weapon-condition { line-height: 1; }
+  .weapon-condition b { font-size: 10px; line-height: 1; }
+  .weapon-state-track { margin-top: 3px; }
+  .weapon-munitions { margin-top: 2px; }
+  .weapon-munitions i { height: 4px; }
+  .weapon-slots { margin-top: 4px; }
+  .weapon-slots button { padding: 3px 2px; gap: 1px; line-height: 1; }
+  .weapon-slot-icon { width: 27px; height: 15px; }
+  .weapon-slot-label { line-height: 1.1; }
+  .weapon-reload { margin-top: 4px; padding: 3px 2px; line-height: 1.1; }
+  .weapon-reload kbd { padding: 0 3px; line-height: 1; }
+  .radar-panel { bottom: 87px; width: 72px; }
+  .radar { width: 72px; height: 72px; }
+  .radar-n { top: -11px; }
+  .radar-caption { margin-top: 8px; }
+  .hud:has(.tactics-panel[open]) .radio-panel { left: 16px; bottom: 302px; width: calc(100% - 212px); transform: none; }
+  .hud:has(.tactics-panel[open]) .radio-message { grid-template-columns: 1fr; gap: 5px; }
+  .hud:has(.tactics-panel[open]) .radio-avatar { display: none; }
+  .hud:has(.tactics-panel[open]) .radio-message strong, .hud:has(.tactics-panel[open]) .radio-message p { grid-column: 1; }
+}
+@media(max-width:760px) and (min-height:551px) {
+  /* Keep the portrait fighter and firing axis clear; intel uses the opposite lane. */
+  .radio-panel { top: 201px; bottom: auto; }
+  .hud:has(.squad-panel:not([hidden]), .side-objectives:not([hidden])) .radio-panel { left: auto; right: 16px; width: calc(100% - 212px); transform: none; }
+  .hud:has(.squad-panel:not([hidden]), .side-objectives:not([hidden])) .radio-message { grid-template-columns: 1fr; gap: 5px; }
+  .hud:has(.squad-panel:not([hidden]), .side-objectives:not([hidden])) .radio-avatar { display: none; }
+  .hud:has(.squad-panel:not([hidden]), .side-objectives:not([hidden])) .radio-message strong, .hud:has(.squad-panel:not([hidden]), .side-objectives:not([hidden])) .radio-message p { grid-column: 1; }
+  .hud:has(.tactics-panel[open]) .radio-panel { top: 201px; bottom: auto; left: 16px; right: auto; width: calc(100% - 212px); transform: none; }
+  .hud:has(.tactics-panel[open]) .radio-message { grid-template-columns: 1fr; gap: 5px; }
+  .hud:has(.tactics-panel[open]) .radio-avatar { display: none; }
+  .hud:has(.tactics-panel[open]) .radio-message strong, .hud:has(.tactics-panel[open]) .radio-message p { grid-column: 1; }
+  .hud:has(.tactics-panel[open]) .squad-panel, .hud:has(.tactics-panel[open]) .side-objectives:not(.with-squad) { top: 292px; }
+}
+@media(max-width:760px) and (max-height:550px) {
+  .mission-panel { top: 15px; max-width: 38%; }
+  .mission-title { font-size: 11px; }
+  .mission-panel p { font-size: 9px; }
+  .stages { left: 50%; top: 20px; transform: translateX(-50%); }
+  .flight-actions { top: 15px; }
+  .weapon-panel { top: 86px; bottom: auto; right: 16px; width: 177px; }
+  .weapon-selector { margin: 7px 0; }
+  .weapon-slots { margin-top: 7px; }
+  .weapon-slot-icon { height: 19px; }
+  .weapon-reload { padding: 4px 0; }
+  .tactics-panel { top: 279px; right: 16px; width: 177px; }
+  .tactics-panel[open] { top: 86px; width: 190px; max-height: calc(100vh - 110px); }
+  .flight-telemetry { bottom: 17px; width: 146px; }
+  .telemetry-heading { margin-bottom: 5px; }
+  .meter-row { margin: 6px 0; }
+  .flight-readings { margin-top: 5px; margin-bottom: 5px; }
+  .radar-panel { right: 21px; bottom: 17px; width: 74px; }
+  .radar { width: 74px; height: 74px; }
+  .radar-caption { margin-top: 7px; }
+  .radio-panel { bottom: 17px; left: 50%; width: calc(100% - 366px); min-width: 230px; max-width: 340px; }
+  .radio-message { grid-template-columns: 25px 1fr; gap: 2px 7px; padding: 6px 8px; }
+  .radio-avatar { width: 25px; height: 25px; }
+  .radio-message strong { font-size: 7px; }
+  .radio-message p { font-size: 9px; }
+  .squad-panel, .side-objectives { top: 112px; width: 175px; max-width: 28%; }
+  .touch-controls { left: 50%; bottom: 86px; }
+  .toast { top: 71px; width: 51%; padding: 8px; }
+}
