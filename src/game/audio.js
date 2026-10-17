@@ -1,5 +1,5 @@
-/** Original synthesized space-opera sound. No recordings or network audio. */
-export function createAudio() {
+/** Original space-opera synthesis with optional, locally bundled licensed samples. */
+export function createAudio({ manifest = 'audio/manifest.json' } = {}) {
   const STORAGE_KEY = 'death-star-assault:muted';
   const MAX_VOICES = 24;
   let context, bus, noiseBuffer, flightGain, engineLow, engineHigh, engineFilter;
@@ -7,6 +7,13 @@ export function createAudio() {
   let muted = false;
   let flight = { speed: 0, boost: false, active: false };
   let lastFlyby = -Infinity;
+  let paused = false;
+  let sampleManifest = manifest;
+  let sampleLoad = null;
+  let sampleRevision = 0;
+  let sampleState = 'idle';
+  const samples = new Map();
+  const cooldowns = new Map();
   const nodes = new Set();
   const sources = new Set();
   const voices = new Set();
@@ -16,7 +23,7 @@ export function createAudio() {
   const clamp = (value, low, high) => Math.min(high, Math.max(low, Number.isFinite(value) ? value : low));
 
   function voice(priority = false) {
-    if (!context || disposed || muted || context.state !== 'running') return null;
+    if (!context || disposed || muted || paused || context.state !== 'running') return null;
     if (voices.size >= MAX_VOICES) {
       if (!priority) return null;
       voices.values().next().value.cleanup();
@@ -91,6 +98,72 @@ export function createAudio() {
     filter.connect(envelope(v, volume, when, duration));
     v.play(source, when, duration);
   }
+  // A manifest is shipped with the game; it is never a remote audio search service.
+  function localUrl(path) {
+    if (typeof path !== 'string' || !path || /^(?:[a-z]+:|\/\/)/i.test(path) || path.includes('\\')) return null;
+    const base = globalThis.document?.baseURI || globalThis.location?.href || 'http://localhost/';
+    const url = new URL(path, base);
+    return url.origin === new URL(base).origin ? url.href : null;
+  }
+  async function loadManifest(next = sampleManifest) {
+    sampleManifest = next;
+    if (!context || disposed || !context.decodeAudioData || !globalThis.fetch || !next) return false;
+    const revision = ++sampleRevision;
+    sampleState = 'loading';
+    const fallback = () => {
+      if (!disposed && revision === sampleRevision) sampleState = 'fallback';
+      return false;
+    };
+    const decoded = new Map();
+    try {
+      let entries = next;
+      if (typeof next === 'string') {
+        const url = localUrl(next);
+        if (!url) return fallback();
+        const response = await fetch(url);
+        if (!response.ok) return fallback();
+        entries = await response.json();
+      }
+      if (!entries || typeof entries !== 'object' || Array.isArray(entries)) return fallback();
+      await Promise.all(Object.entries(entries).slice(0, 24).map(async ([event, entry]) => {
+        try {
+          const url = localUrl(entry?.url);
+          if (!url) return;
+          const response = await fetch(url);
+          if (!response.ok || Number(response.headers?.get('content-length')) > 4_000_000) return;
+          const bytes = await response.arrayBuffer();
+          if (!bytes.byteLength || bytes.byteLength > 4_000_000 || disposed || revision !== sampleRevision) return;
+          const buffer = await context.decodeAudioData(bytes);
+          if (buffer.duration > 0 && buffer.duration <= 12) decoded.set(event, { buffer, gain: clamp(entry.gain ?? 0.5, 0, 1) });
+        } catch { /* Missing or unsupported media keeps the original synth available. */ }
+      }));
+      if (disposed || revision !== sampleRevision) return false;
+      samples.clear();
+      for (const [event, sample] of decoded) samples.set(event, sample);
+      sampleState = samples.size ? 'ready' : 'fallback';
+      return samples.size > 0;
+    } catch {
+      return fallback();
+    }
+  }
+  function sample(event, priority = false) {
+    const loaded = samples.get(event);
+    if (!loaded) return false;
+    const v = voice(priority);
+    if (v) {
+      const source = v.own(context.createBufferSource());
+      source.buffer = loaded.buffer;
+      source.connect(envelope(v, loaded.gain, context.currentTime, loaded.buffer.duration));
+      v.play(source, context.currentTime, loaded.buffer.duration);
+    }
+    return true;
+  }
+  function ready(event, seconds) {
+    if (!context || disposed || muted || paused || context.state !== 'running') return false;
+    if (context.currentTime - (cooldowns.get(event) ?? -Infinity) < seconds) return false;
+    cooldowns.set(event, context.currentTime);
+    return true;
+  }
   function buildEngine() {
     flightGain = track(context.createGain());
     flightGain.gain.value = 0;
@@ -155,14 +228,17 @@ export function createAudio() {
         flight = { speed: -10, boost: !desired.boost, active: !desired.active };
         setFlight(desired);
       }
-      return context.resume().then(() => true).catch(() => false);
+      return context.resume().then(() => {
+        if (!sampleLoad) sampleLoad = loadManifest();
+        return true;
+      }).catch(() => false);
     } catch { return Promise.resolve(false); }
   }
   function setFlight({ speed = 0, boost = false, active = false } = {}) {
     const next = { speed: clamp(speed, 0, 1.7), boost: Boolean(boost), active: Boolean(active) };
     const speedChanged = Math.abs(next.speed - flight.speed) > 0.012 || next.boost !== flight.boost;
     if (context && !disposed) {
-      if (next.active !== flight.active) smooth(flightGain.gain, next.active ? 0.24 : 0, 0.09);
+      if (next.active !== flight.active) smooth(flightGain.gain, next.active && !paused ? 0.24 : 0, 0.09);
       if (speedChanged) {
         const throttle = next.speed + (next.boost ? 0.35 : 0);
         smooth(engineLow.frequency, 43 + throttle * 38, 0.1);
@@ -174,18 +250,21 @@ export function createAudio() {
     if (!context || speedChanged || next.active !== flight.active) flight = next;
   }
   function laser() {
+    if (sample('laser', false)) return;
     const v = voice();
     tone(v, 1150, 110, 0.18, 'sawtooth', 0.22);
     tone(v, 620, 90, 0.13, 'square', 0.09, 0.008);
     noise(v, 2900, 430, 0.095, 0.3, 0, 'bandpass', 2.5);
   }
   function enemyLaser() {
+    if (sample('enemyLaser', false)) return;
     const v = voice();
     tone(v, 1740, 310, 0.12, 'square', 0.1);
     tone(v, 920, 180, 0.17, 'sawtooth', 0.14, 0.008);
     noise(v, 3500, 700, 0.065, 0.17, 0, 'highpass');
   }
   function torpedo() {
+    if (sample('torpedo', true)) return;
     const v = voice(true);
     noise(v, 550, 95, 0.42, 0.64, 0, 'lowpass');
     tone(v, 180, 40, 0.23, 'triangle', 0.34);
@@ -194,6 +273,7 @@ export function createAudio() {
     noise(v, 1700, 3900, 0.55, 0.2, 0.09, 'bandpass', 2);
   }
   function ion() {
+    if (sample('ion', true)) return;
     const v = voice(true);
     tone(v, 190, 1400, 0.22, 'triangle', 0.25);
     tone(v, 1250, 65, 0.65, 'sine', 0.25, 0.1);
@@ -202,6 +282,7 @@ export function createAudio() {
   }
   function hit(shielded = true) {
     const shield = typeof shielded === 'object' ? Boolean(shielded?.shield ?? shielded?.shielded) : Boolean(shielded);
+    if (sample(shield ? 'shieldHit' : 'hullHit')) return;
     const v = voice();
     if (shield) {
       tone(v, 1120, 230, 0.22, 'sine', 0.23);
@@ -214,6 +295,7 @@ export function createAudio() {
     }
   }
   function explosion() {
+    if (sample('explosion', true)) return;
     const v = voice(true);
     noise(v, 5300, 70, 1.2, 1.05, 0, 'lowpass');
     noise(v, 2200, 150, 0.75, 0.48, 0.06, 'bandpass', 0.7);
@@ -221,6 +303,7 @@ export function createAudio() {
     tone(v, 170, 27, 0.55, 'sawtooth', 0.2);
   }
   function cue() {
+    if (sample('cue', false)) return;
     const v = voice();
     tone(v, 1250, 1790, 0.07, 'sine', 0.13);
     tone(v, 2100, 1480, 0.1, 'triangle', 0.12, 0.09);
@@ -229,6 +312,7 @@ export function createAudio() {
   }
   function ability(kind) {
     if (kind === 'ion' || kind === 'ion-pulse') { ion(); return; }
+    if (sample('ability', true)) return;
     const v = voice(true);
     tone(v, 180, 880, 0.55, 'sine', 0.2);
     tone(v, 245, 1180, 0.48, 'triangle', 0.13, 0.06);
@@ -244,6 +328,61 @@ export function createAudio() {
     tone(v, 610, 125, 0.75, 'square', 0.065 * proximity, 0.025);
     noise(v, 1500, 190, 0.85, 0.42 * proximity, 0, 'bandpass', 2.2);
   }
+  function astromech() {
+    if (!ready('astromech', 2.2) || sample('astromech')) return;
+    const v = voice();
+    // Glides and uneven answers form an original droid-like phrase.
+    for (const [from, to, delay, duration] of [[820, 1530, 0, 0.1], [1700, 980, 0.13, 0.08], [660, 1260, 0.26, 0.16], [2100, 1640, 0.46, 0.08]]) {
+      tone(v, from, to, duration, 'sine', 0.12, delay);
+      tone(v, from * 1.48, to * 1.48, duration, 'triangle', 0.035, delay);
+    }
+  }
+  function radio(kind = 'in') {
+    const closing = kind === 'out';
+    if (!ready(`radio-${kind}`, 0.25) || sample(closing ? 'radioOut' : 'radioIn')) return;
+    const v = voice();
+    noise(v, closing ? 1800 : 900, closing ? 600 : 2600, 0.12, 0.19, 0, 'bandpass', 3);
+    tone(v, closing ? 1180 : 1650, closing ? 830 : 1250, 0.045, 'sine', 0.07, 0.025);
+  }
+  function lock(state = 'search') {
+    if (!['search', 'locked', 'lost'].includes(state) || !ready(`lock-${state}`, state === 'search' ? 0.55 : 1.4) || sample(`lock-${state}`)) return;
+    const v = voice();
+    tone(v, state === 'lost' ? 750 : 1100, state === 'lost' ? 330 : 1100, 0.07, 'sine', 0.09);
+    if (state === 'locked') tone(v, 1650, 1650, 0.13, 'sine', 0.1, 0.12);
+  }
+  function incoming() {
+    if (!ready('incoming', 1.25) || sample('incoming', true)) return;
+    const v = voice(true);
+    for (let i = 0; i < 3; i++) tone(v, 710, 1220, 0.13, 'square', 0.055, i * 0.22);
+  }
+  function turbolaser() {
+    if (!ready('turbolaser', 0.08) || sample('turbolaser')) return;
+    const v = voice();
+    tone(v, 390, 45, 0.36, 'sawtooth', 0.2);
+    tone(v, 155, 34, 0.42, 'triangle', 0.21);
+    noise(v, 1800, 160, 0.25, 0.25, 0, 'lowpass');
+  }
+  function vent() {
+    if (!ready('vent', 2) || sample('vent')) return;
+    const v = voice();
+    noise(v, 6500, 650, 1.3, 0.23, 0, 'highpass', 0.6);
+    noise(v, 1300, 240, 0.8, 0.12, 0, 'bandpass', 1.4);
+  }
+  function missionCue(kind = 'objective') {
+    if (!ready(`mission-${kind}`, 1.5) || sample(`mission-${kind}`, true)) return;
+    const v = voice(true);
+    // Newly composed short interval patterns, without a film theme quotation.
+    const notes = kind === 'success' ? [392, 523.25, 659.25, 783.99] : kind === 'fail' ? [293.66, 277.18, 220, 146.83] : [523.25, 698.46];
+    notes.forEach((frequency, i) => {
+      tone(v, frequency, frequency, 0.3, 'triangle', 0.12, i * 0.19);
+      tone(v, frequency / 2, frequency / 2, 0.34, 'sine', 0.1, i * 0.19);
+    });
+  }
+  function setPaused(value) {
+    paused = Boolean(value);
+    if (paused) for (const v of [...voices]) v.cleanup();
+    if (flightGain && !disposed) smooth(flightGain.gain, !paused && flight.active ? 0.24 : 0, 0.025);
+  }
   function setMuted(value) {
     muted = Boolean(value);
     try { globalThis.localStorage?.setItem(STORAGE_KEY, String(muted)); } catch { /* Storage is optional. */ }
@@ -253,6 +392,10 @@ export function createAudio() {
   function dispose() {
     if (disposed) return;
     disposed = true;
+    sampleRevision++;
+    samples.clear();
+    sampleState = 'disposed';
+    cooldowns.clear();
     for (const v of [...voices]) v.cleanup();
     for (const source of sources) {
       source.onended = null;
@@ -266,6 +409,8 @@ export function createAudio() {
   }
   return {
     start, laser, enemyLaser, torpedo, ion, hit, explosion, cue, ability, tie, setFlight, setMuted, dispose,
+    astromech, radio, lock, incoming, turbolaser, vent, missionCue, setPaused, loadManifest,
+    getSampleStatus: () => ({ state: sampleState, events: [...samples.keys()] }),
     engine: setFlight,
     updateEngine: (speed, maxSpeed = 1, active = true) => setFlight({ speed: speed / Math.max(1, maxSpeed), active, boost: speed > maxSpeed * 1.12 }),
     getmuted: () => muted,

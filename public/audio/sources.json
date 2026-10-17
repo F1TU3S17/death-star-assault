@@ -1,0 +1,78 @@
+{
+  "sources": {
+    "Kenney": "https://kenney.nl/assets/sci-fi-sounds",
+    "rubberduck": "https://opengameart.org/content/50-cc0-sci-fi-sfx"
+  },
+  "assets": [
+    {
+      "file": "kenney/explosionCrunch_000.ogg",
+      "creator": "Kenney",
+      "license": "CC0-1.0",
+      "bytes": 28274,
+      "sha256": "4b597d658d0ae101f0a030fbeea5fc3a4292ab85f017470a8254a8e7959cbd69"
+    },
+    {
+      "file": "kenney/forceField_000.ogg",
+      "creator": "Kenney",
+      "license": "CC0-1.0",
+      "bytes": 25672,
+      "sha256": "c2916f2a062c8ddd1aca2826d134fe90847037db31342726ffb0f9097afe339c"
+    },
+    {
+      "file": "kenney/laserLarge_000.ogg",
+      "creator": "Kenney",
+      "license": "CC0-1.0",
+      "bytes": 25566,
+      "sha256": "a56d95794cd732d6c2d66ce488c14cf557fe526c282897c9a77675c2bd9b77e6"
+    },
+    {
+      "file": "kenney/laserSmall_000.ogg",
+      "creator": "Kenney",
+      "license": "CC0-1.0",
+      "bytes": 7286,
+      "sha256": "72b589eadd41781257ac859e4f4d030222e623390e4a1a83f6d05329a6e026f1"
+    },
+    {
+      "file": "kenney/laserSmall_001.ogg",
+      "creator": "Kenney",
+      "license": "CC0-1.0",
+      "bytes": 7448,
+      "sha256": "ab87913aba9790a0c5fa173d086267ba521ad522fcad2252271db49988313cf5"
+    },
+    {
+      "file": "kenney/lowFrequency_explosion_000.ogg",
+      "creator": "Kenney",
+      "license": "CC0-1.0",
+      "bytes": 14317,
+      "sha256": "3cb48d86dab63140cfb9aaeea4d4a6846abaca5831d157d8adbec0490da26343"
+    },
+    {
+      "file": "kenney/spaceEngineLarge_000.ogg",
+      "creator": "Kenney",
+      "license": "CC0-1.0",
+      "bytes": 189900,
+      "sha256": "885aeda16116b715be5e8fd03d0d77959761015e1ca5823fd3b53d4fd965107f"
+    },
+    {
+      "file": "kenney/thrusterFire_000.ogg",
+      "creator": "Kenney",
+      "license": "CC0-1.0",
+      "bytes": 201216,
+      "sha256": "0fdc474d93f209debf1fc4ea77765a669dcb7676db31b4d8a0a509685bccf374"
+    },
+    {
+      "file": "rubberduck/beep_01.ogg",
+      "creator": "rubberduck",
+      "license": "CC0-1.0",
+      "bytes": 9764,
+      "sha256": "6d82719549fc522a25d572a14bc4f204e39b78f28a6ca8cfc3e0fc95c4a1b738"
+    },
+    {
+      "file": "rubberduck/terminal_01.ogg",
+      "creator": "rubberduck",
+      "license": "CC0-1.0",
+      "bytes": 12708,
+      "sha256": "cde6464d6dc78ea0a96cd06e2d2777e98f202b30a82c3f5295dfee11a284446e"
+    }
+  ]
+}

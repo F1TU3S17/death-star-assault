@@ -204,7 +204,10 @@ function loadModel(url) {
 export function createShip(kind = 'xwing', modelUrl, modelOptions = {}) {
   const root = new THREE.Group();
   const fallback = fallbackShip(kind);
-  fallback.traverse(object => { if (object.isMesh) { object.castShadow = true; object.receiveShadow = true; } });
+  // The world shadow map covers hundreds of metres. Its texels cannot resolve
+  // thin wing panels: self-shadowing makes them crawl as the chase camera moves.
+  // Ships retain their PBR/normal-map shading and environment reflections.
+  fallback.traverse(object => { if (object.isMesh) { object.castShadow = false; object.receiveShadow = false; } });
   root.add(fallback);
   root.userData.kind = kind;
   addEngineLights(root, kind);
@@ -245,8 +248,8 @@ export function createShip(kind = 'xwing', modelUrl, modelOptions = {}) {
       const tunedMaterials = new Map();
       asset.traverse(object => {
         if (!object.isMesh) return;
-        object.castShadow = true;
-        object.receiveShadow = true;
+        object.castShadow = false;
+        object.receiveShadow = false;
         const tune = (original) => {
           if (tunedMaterials.has(original)) return tunedMaterials.get(original);
           const material = original.clone();
@@ -324,7 +327,7 @@ export function createWorld(scene) {
   function deathStar(radius) {
     const group = new THREE.Group();
     const dishNormal = new THREE.Vector3(-0.31, 0.38, 0.87).normalize();
-    const sphereGeometry = new THREE.SphereGeometry(radius, 256, 192);
+    const sphereGeometry = new THREE.SphereGeometry(radius, 128, 96);
     const positions = sphereGeometry.attributes.position;
     const vertex = new THREE.Vector3();
     for (let i = 0; i < positions.count; i++) {
@@ -343,8 +346,8 @@ export function createWorld(scene) {
     const dishMat = new THREE.MeshStandardMaterial({ color: 0x65727e, map: stationTexture, bumpMap: stationTexture, bumpScale: radius * 0.00014, roughness: 0.9, metalness: 0.24, side: THREE.DoubleSide });
     const dishRadius = radius * 0.182;
     const dishZ = r => -radius * 0.066 + (r / dishRadius) ** 2 * radius * 0.049;
-    const dishPoints = Array.from({ length: 65 }, (_, i) => new THREE.Vector2(dishRadius * i / 64, dishZ(dishRadius * i / 64)));
-    const bowl = new THREE.Mesh(new THREE.LatheGeometry(dishPoints, 144), dishMat);
+    const dishPoints = Array.from({ length: 33 }, (_, i) => new THREE.Vector2(dishRadius * i / 32, dishZ(dishRadius * i / 32)));
+    const bowl = new THREE.Mesh(new THREE.LatheGeometry(dishPoints, 96), dishMat);
     bowl.rotation.x = Math.PI / 2;
     // Lathe's Y axis becomes local +Z, with the centre sunk into the hull.
     dish.add(bowl);

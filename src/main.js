@@ -39,6 +39,7 @@ root.innerHTML = `
     <div class="flight-actions"><div class="clock">T + <span id="clock">00:00</span></div><div><button id="camera" title="Сменить камеру (C)" aria-label="Сменить камеру">КАБИНА <kbd>C</kbd></button><button id="sound" title="Звук" aria-label="Выключить звук">ЗВУК ◉</button><button id="pause" title="Пауза (Esc)" aria-label="Пауза">Ⅱ</button></div></div>
     <div class="reticle" id="reticle" aria-hidden="true"><i></i><span></span><b>·</b></div>
     <div class="target-bracket" id="target" hidden aria-hidden="true"><span id="target-distance"></span></div>
+    <div class="world-markers" id="world-markers" aria-hidden="true"></div>
     <div class="flight-telemetry"><div class="telemetry-heading"><span id="flight-ship">КРАСНЫЙ ПЯТЬ</span><span id="camera-label">ВНЕШНЯЯ КАМЕРА</span></div><div class="meter-row blue"><span>◈</span><div><label>ЩИТЫ <b id="shield-value">100</b></label><div class="meter"><i id="shield-bar"></i></div></div></div><div class="meter-row amber"><span>⬡</span><div><label>КОРПУС <b id="hull-value">100</b></label><div class="meter"><i id="hull-bar"></i></div></div></div><div class="flight-readings"><div><strong id="speed-value">0</strong><span>СКОРОСТЬ</span></div><div class="heat-reading"><span>НАГРЕВ ОРУДИЙ</span><div class="meter"><i id="heat-bar"></i></div></div></div><button class="ability-button" id="ability"><kbd>F</kbd><span id="flight-ability">Фокус щитов</span><b id="ability-cooldown">ГОТОВО</b></button></div>
     <aside class="squad-panel" id="squad-panel" hidden aria-label="Состояние ударной группы"><div class="label" id="squad-heading">ПРИКРЫТИЕ ЭСКАДРИЛЬИ</div><div id="allies-list"></div><p id="escort-hint"></p></aside>
     <aside class="side-objectives" id="side-objectives" hidden aria-label="Дополнительные задания"></aside>
@@ -52,8 +53,8 @@ root.innerHTML = `
   <div class="cinematic-caption" id="cinematic" hidden><span>ЭПИЗОД IV</span><h2>Один выстрел меняет всё.</h2><p>Красный Пять · торпеды выпущены</p></div>
   <div class="toast" id="toast" role="status" hidden></div>
   <section class="overlay" id="pause-overlay" hidden aria-label="Пауза"><div class="modal"><span class="eyebrow">ОПЕРАЦИЯ ПРИОСТАНОВЛЕНА</span><h2>Держим позицию.</h2><p>Эскадрилья ждёт вашего возвращения.</p><button class="launch" id="resume">ПРОДОЛЖИТЬ <span>↗</span></button><button class="secondary" data-help>Управление</button><button class="secondary" id="restart">Начать вылет заново</button><button class="text-button" id="back-menu">В главный ангар</button></div></section>
-  <section class="overlay" id="result-overlay" hidden aria-label="Результат операции"><div class="modal result"><span class="eyebrow" id="result-eyebrow"></span><h2 id="result-title"></h2><p id="result-description"></p><div class="result-stats"><div><span>ВРЕМЯ ВЫЛЕТА</span><strong id="result-time"></strong></div><div><span>СБИТЫЕ ЦЕЛИ</span><strong id="result-kills"></strong></div></div><button class="launch" id="replay">ПОВТОРИТЬ ВЫЛЕТ <span>↗</span></button><button class="secondary" id="result-menu">Вернуться в ангар</button></div></section>
-  <dialog id="help" class="help-dialog"><button class="close-help" id="close-help" aria-label="Закрыть управление">×</button><span class="eyebrow">ПАМЯТКА ПИЛОТА</span><h2>Управление кораблём</h2><div class="help-grid"><span>Курс / тангаж и рыскание</span><kbd>W A S D</kbd><span>Предыдущее / следующее оружие</span><span><kbd>← ↓</kbd> / <kbd>→ ↑</kbd></span><span>Перезарядить торпедные пусковые</span><kbd>R</kbd><span>Энергия: тяга / оружие / щиты / баланс</span><kbd>1 / 2 / 3 / 4</kbd><span>Ремонт астродроидом</span><kbd>V</kbd><span>Вызвать двух ведомых</span><kbd>T</kbd><span>Крылья X-wing: крейсер / атака</span><kbd>X</kbd><span>Крен</span><span><kbd>Q</kbd> / <kbd>E</kbd></span><span>Ускорение</span><kbd>SHIFT</kbd><span>Торможение / малая тяга</span><kbd>CTRL</kbd><span>Огонь выбранным оружием</span><span><kbd>ПРОБЕЛ</kbd> / ЛКМ</span><span>Оборудование корабля</span><kbd>F</kbd><span>Кабина / внешняя камера</span><kbd>C</kbd><span>Пауза</span><kbd>ESC</kbd></div><p>1–4 перераспределяют энергию: усиление одной системы имеет цену. V восстанавливает 25 единиц корпуса за 3 секунды (два заряда); попадание прерывает ремонт, огонь на время отключён. T вызывает двух ведомых на 10 секунд (три вызова). X складывает или раскрывает S-foils; ускорение сохраняет боевое положение. При сложенных или движущихся крыльях оружие заблокировано: раскройте их клавишей X. Держите цель в пределах круга прицела, чтобы использовать помощь наведения. Ctrl снижает тягу для точного боя. Стрелки переключают лазеры, протонные торпеды и ионные пушки Y-wing. R перезаряжает торпедные пусковые за 4,5 секунды из конечного запаса. Рамка захвата подтверждает цель. При сопровождении держитесь рядом с союзниками и защищайте их от TIE. Красная рамка отмечает ближайшую угрозу. В траншее проходите светящиеся створы. Для пуска торпед нажимайте указанную клавишу до окончания отсчёта.</p><p class="help-note">X-wing и Y-wing участвовали в битве при Явине. A-wing появится в будущих эпизодах. Характеристики и способности адаптированы для аркадной игры.</p><button class="launch" id="help-done">ПОНЯТНО <span>↗</span></button></dialog>
+  <section class="overlay" id="result-overlay" hidden aria-label="Результат операции"><div class="modal result"><span class="eyebrow" id="result-eyebrow"></span><h2 id="result-title"></h2><p id="result-description"></p><div class="result-stats"><div><span>ВРЕМЯ ВЫЛЕТА</span><strong id="result-time"></strong></div><div><span>СБИТЫЕ ЦЕЛИ</span><strong id="result-kills"></strong></div><div><span>БОНУС ЗА ЦЕЛИ</span><strong id="result-bonus">0</strong></div><div><span>ДОП. ЦЕЛИ</span><strong id="result-objectives">0 / 0</strong></div></div><button class="launch" id="replay">ПОВТОРИТЬ ВЫЛЕТ <span>↗</span></button><button class="secondary" id="result-menu">Вернуться в ангар</button></div></section>
+  <dialog id="help" class="help-dialog"><button class="close-help" id="close-help" aria-label="Закрыть управление">×</button><span class="eyebrow">ПАМЯТКА ПИЛОТА</span><h2>Управление кораблём</h2><div class="help-grid"><span>Курс / тангаж и рыскание</span><kbd>W A S D</kbd><span>Предыдущее / следующее оружие</span><span><kbd>← ↓</kbd> / <kbd>→ ↑</kbd></span><span>Перезарядить торпедные пусковые</span><kbd>R</kbd><span>Энергия: тяга / оружие / щиты / баланс</span><kbd>1 / 2 / 3 / 4</kbd><span>Ремонт астродроидом</span><kbd>V</kbd><span>Вызвать двух ведомых</span><kbd>T</kbd><span>Крылья X-wing: крейсер / атака</span><kbd>X</kbd><span>Крен</span><span><kbd>Q</kbd> / <kbd>E</kbd></span><span>Ускорение</span><kbd>SHIFT</kbd><span>Торможение / малая тяга</span><kbd>CTRL</kbd><span>Огонь выбранным оружием</span><span><kbd>ПРОБЕЛ</kbd> / ЛКМ</span><span>Оборудование корабля</span><kbd>F</kbd><span>Кабина / внешняя камера</span><kbd>C</kbd><span>Пауза</span><kbd>ESC</kbd></div><p>1–4 перераспределяют энергию: усиление одной системы имеет цену. V восстанавливает 25 единиц корпуса за 3 секунды (два заряда); попадание прерывает ремонт, огонь на время отключён. T вызывает двух ведомых на 10 секунд (три вызова). X складывает или раскрывает S-foils; ускорение сохраняет боевое положение. При сложенных или движущихся крыльях оружие заблокировано: раскройте их клавишей X. Держите цель в пределах круга прицела, чтобы использовать помощь наведения. Ctrl снижает тягу для точного боя. Стрелки переключают лазеры, протонные торпеды и ионные пушки Y-wing. R перезаряжает торпедные пусковые за 4,5 секунды из конечного запаса. Рамка захвата подтверждает цель. При сопровождении держитесь рядом с союзниками и защищайте их от TIE. Красная рамка отмечает ближайшую угрозу. В траншее проходите светящиеся створы. Для пуска торпед нажимайте указанную клавишу до окончания отсчёта.</p><p class="help-note">При сканировании уменьшите тягу клавишей Ctrl и держите синий сенсор в прицеле 3 секунды. Маркер Золотой пары подсвечен янтарным. В траншее следите за янтарным предупреждением вентиля и стреляйте по регулятору охлаждения.</p><p class="help-note">X-wing и Y-wing участвовали в битве при Явине. A-wing появится в будущих эпизодах. Характеристики и способности адаптированы для аркадной игры.</p><button class="launch" id="help-done">ПОНЯТНО <span>↗</span></button></dialog>
   <div class="fatal overlay" id="fatal" hidden><div class="modal"><span class="eyebrow">НЕТ СВЯЗИ С АНГАРОМ</span><h2>Не удалось запустить 3D.</h2><p id="fatal-message">Для игры нужен браузер с поддержкой WebGL2. Включите аппаратное ускорение и обновите страницу.</p><button class="launch" onclick="location.reload()">ПОВТОРИТЬ <span>↗</span></button></div></div>
 `;
 
@@ -86,11 +87,103 @@ function selectShip(id) {
 }
 
 let toastTimer;
-function showToast(message) {
+function showToast(message, duration = 3800, tone = '') {
   $('toast').textContent = message;
+  $('toast').className = tone ? `toast ${tone}` : 'toast';
   $('toast').hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { $('toast').hidden = true; }, 3800);
+  toastTimer = setTimeout(() => { $('toast').hidden = true; }, duration);
+}
+
+let sideObjectivesSignature = '';
+function updateSideObjectives(entries, mode) {
+  const panel = $('side-objectives');
+  const objectives = Array.isArray(entries) ? entries : [];
+  panel.hidden = !objectives.length || mode !== 'playing';
+  const squadPanel = $('squad-panel');
+  const squadVisible = !squadPanel.hidden && mode === 'playing';
+  panel.classList.toggle('with-squad', squadVisible);
+  if (squadVisible) panel.style.top = `${squadPanel.offsetTop + squadPanel.offsetHeight + 10}px`;
+  else panel.style.removeProperty('top');
+  const signature = objectives.map((entry) => `${entry.id}:${entry.status}:${entry.complete}:${Math.round((Number(entry.progress) || 0) / Math.max(1, Number(entry.target) || 1) * 100)}:${entry.title}:${entry.bonus}`).join('|');
+  if (signature === sideObjectivesSignature) return;
+  sideObjectivesSignature = signature;
+  panel.replaceChildren(...objectives.map((entry) => {
+    const status = entry.status || (entry.complete ? 'completed' : 'active');
+    const target = Number(entry.target) || 0;
+    const progress = Number(entry.progress) || 0;
+    const percent = status === 'completed' ? 100 : target > 0 ? clamp(progress / target * 100) : 0;
+    const row = document.createElement('div');
+    row.className = 'side-objective-row';
+    row.dataset.status = status;
+    const heading = document.createElement('div');
+    heading.className = 'side-objective-heading';
+    const title = document.createElement('span');
+    title.textContent = entry.title || 'Дополнительная цель';
+    const state = document.createElement('b');
+    state.textContent = status === 'completed' ? 'ВЫПОЛНЕНО'
+      : status === 'missed' ? 'ПРОПУЩЕНО'
+      : entry.kind === 'scan' ? `СЕНСОР ${Math.round(percent)}%`
+      : status === 'pending' ? 'ОЖИДАНИЕ' : percent > 0 ? `ГОТОВНОСТЬ ${Math.round(percent)}%` : 'АКТИВНО';
+    heading.append(title, state);
+    const track = document.createElement('div');
+    track.className = 'side-objective-track';
+    const bar = document.createElement('i');
+    bar.style.width = `${percent}%`;
+    track.append(bar);
+    row.append(heading, track);
+    if (status === 'completed' && Number(entry.bonus) > 0) {
+      const reward = document.createElement('small');
+      reward.textContent = `+${Math.round(Number(entry.bonus))} БОНУС`;
+      row.append(reward);
+    }
+    return row;
+  }));
+}
+
+const worldMarkerNodes = new Map();
+function updateWorldMarkers(markers, mode, reticle = { x: 0.5, y: 0.5 }) {
+  const host = $('world-markers');
+  const items = Array.isArray(markers) ? markers : [];
+  const retained = new Set();
+  for (const marker of items) {
+    const id = String(marker.id || marker.label || '');
+    if (!id) continue;
+    retained.add(id);
+    let item = worldMarkerNodes.get(id);
+    if (!item) {
+      const node = document.createElement('div');
+      node.className = 'world-marker';
+      const label = document.createElement('span');
+      const distance = document.createElement('b');
+      const track = document.createElement('i');
+      const bar = document.createElement('i');
+      track.className = 'world-marker-track';
+      track.append(bar);
+      node.append(label, distance, track);
+      host.append(node);
+      item = { node, label, distance, track, bar };
+      worldMarkerNodes.set(id, item);
+    }
+    const x = Number(marker.x), y = Number(marker.y);
+    const inView = Number.isFinite(x) && Number.isFinite(y) && x > 0 && x < 1 && y > 0 && y < 1;
+    const overReticle = inView && Math.abs((x - reticle.x) * window.innerWidth) < 150 && Math.abs((y - reticle.y) * window.innerHeight) < 75;
+    const active = !marker.status || marker.status === 'active';
+    item.node.hidden = mode !== 'playing' || !inView || overReticle || !active;
+    item.node.style.left = `${x * 100}%`;
+    item.node.style.top = `${y * 100}%`;
+    item.node.dataset.status = marker.status || 'active';
+    item.node.classList.toggle('escort-ace', /ace|gold|escort|wing|золот|ведом|эскорт/i.test(`${id} ${marker.label || ''}`));
+    item.label.textContent = marker.label || 'ЦЕЛЬ';
+    item.distance.textContent = Number.isFinite(Number(marker.distance)) ? `${Math.round(Number(marker.distance))} М` : '';
+    const progress = Number(marker.progress);
+    item.track.hidden = !Number.isFinite(progress);
+    item.bar.style.width = `${clamp(progress * 100)}%`;
+  }
+  for (const [id, item] of worldMarkerNodes) {
+    if (!retained.has(id)) { item.node.remove(); worldMarkerNodes.delete(id); }
+  }
+  host.hidden = mode !== 'playing' || !items.some((marker) => !marker.status || marker.status === 'active');
 }
 
 const radarDots = Array.from({ length: 18 }, () => {
@@ -167,6 +260,9 @@ function render(state) {
   $('ability-cooldown').textContent = state.abilityCooldown > 0 ? `${Math.ceil(state.abilityCooldown)} С` : state.abilityActive ? 'АКТИВНО' : 'ГОТОВО';
   $('ability').disabled = (state.abilityCooldown || 0) > 0;
   $('camera-label').textContent = state.camera === 'cockpit' ? 'ВИД ИЗ КАБИНЫ' : 'ВНЕШНЯЯ КАМЕРА';
+  const reticle = $('reticle');
+  reticle.style.left = `${(state.reticle?.x ?? 0.5) * 100}%`;
+  reticle.style.top = `${(state.reticle?.y ?? 0.5) * 100}%`;
   $('camera').innerHTML = `${state.camera === 'cockpit' ? '3-Е ЛИЦО' : 'КАБИНА'} <kbd>C</kbd>`;
   $('kills').textContent = `${state.kills || 0} ЦЕЛЕЙ`;
   $('tactics').hidden = !['playing', 'paused'].includes(mode);
@@ -226,9 +322,8 @@ function render(state) {
   }
   const nearestAlly = Math.min(...allies.filter(ally => ally.health > 0).map(ally => ally.distance));
   $('escort-hint').textContent = Number.isFinite(nearestAlly) ? `${Math.round(nearestAlly)} М ДО ГРУППЫ${nearestAlly > 700 ? ' · ПРИБЛИЗЬТЕСЬ К СОЮЗНИКАМ' : ' · ДЕРЖИТЕ ПРИКРЫТИЕ'}` : '';
-  const sideObjectives = state.sideObjectives || [];
-  $('side-objectives').hidden = !sideObjectives.length || mode !== 'playing';
-  $('side-objectives').textContent = sideObjectives.map(entry => `${entry.complete ? '✓' : '◇'} ДОП. ЦЕЛЬ: ${entry.title} ${entry.progress} / ${entry.target}`).join(' · ');
+  updateSideObjectives(state.sideObjectives, mode);
+  updateWorldMarkers(state.worldMarkers, mode, state.reticle);
   const targeting = state.targeting || (state.objectiveMarker ? { ...state.objectiveMarker, kind: 'gate' } : null);
   $('target').hidden = !targeting || mode === 'cinematic' || targeting.visible === false;
   if (targeting) {
@@ -253,6 +348,9 @@ function render(state) {
     $('result-description').textContent = victory ? 'Протонные торпеды достигли реактора. Звезда Смерти уничтожена. Сила с вами.' : state.reason || 'Ваш истребитель потерян. Вернитесь в строй и проложите путь к тепловой шахте.';
     $('result-time').textContent = time(state.elapsed);
     $('result-kills').textContent = String(state.kills || 0);
+    const content = state.content || {};
+    $('result-bonus').textContent = String(Math.max(0, Math.round(Number(content.bonusScore) || 0)));
+    $('result-objectives').textContent = `${Math.max(0, Math.round(Number(content.completedObjectives) || 0))} / ${Math.max(0, Math.round(Number(content.totalObjectives) || 0))}`;
   }
   if (mode !== previousMode) {
     if (['menu', 'qte', 'cinematic', 'victory', 'defeat'].includes(mode)) {
@@ -273,6 +371,11 @@ function onEvent(event) {
     $('radio-text').textContent = event.text || '';
   }
   if (event.type === 'mission-complete' && snapshot.mode === 'playing') showToast('ЭТАП ВЫПОЛНЕН · НОВЫЙ ПРИКАЗ ПОЛУЧЕН');
+  if (event.type === 'side-complete') {
+    const bonus = Math.max(0, Math.round(Number(event.bonus ?? event.bonusScore) || 0));
+    showToast(`ДОП. ЦЕЛЬ ВЫПОЛНЕНА${event.title ? ` · ${event.title}` : ''}${bonus ? ` · +${bonus} БОНУС` : ''}`, 3400, 'bonus');
+  }
+  if (event.type === 'vent-warning') showToast('ВЕНТИЛЬ ПЕРЕГРЕТ · СТРЕЛЯЙТЕ ПО РЕГУЛЯТОРУ ОХЛАЖДЕНИЯ', 2400, 'warning');
   if (event.type === 'qte-failed') showToast('КУРС ПОТЕРЯН · ПОВТОРИТЕ ПРИЦЕЛИВАНИЕ');
   if (event.type === 'asset-error') showToast('Резервная модель истребителя активна');
   if (event.type === 'support' && event.status === 'no-target') showToast('ВЕДОМЫЕ ЖДУТ ЦЕЛЬ · НАПРАВЬТЕ ПРИЦЕЛ НА ПРОТИВНИКА');

@@ -661,7 +661,7 @@ kbd {
 .reticle {
   position: absolute;
   left: 50%;
-  top: 46%;
+  top: 50%;
   width: 110px;
   height: 110px;
   transform: translate(-50%,-50%);
@@ -2081,4 +2081,38 @@ body[data-mode=qte]::after { bottom: 0; }
   .weapon-panel { width: 235px; border-color: #7894aa35; background: #05080c85; }
   .tactics-panel { width: 235px; background: #05080c85; }
   .key-hints { letter-spacing: 2px; }
+}
+
+/* Mission intel additions remain lightweight and attached to existing HUD areas. */
+.world-markers { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
+.world-marker { position: absolute; transform: translate(-50%, -50%); min-width: 96px; padding: 5px 7px 4px; display: grid; grid-template-columns: 1fr auto; gap: 3px 8px; color: #8bdfff; background: #07111bc7; border-left: 1px solid #63cfff; font-size: 8px; line-height: 1.2; letter-spacing: .8px; text-shadow: 0 1px 5px #000; }
+.world-marker[hidden] { display: none; }
+.world-marker span { white-space: nowrap; }
+.world-marker b { color: #c2edff; font-size: 7px; font-weight: 400; }
+.world-marker.escort-ace { color: #ffd080; border-color: #f0a83e; }
+.world-marker.escort-ace b { color: #ffd080; }
+.world-marker-track { grid-column: 1 / -1; display: block; height: 2px; background: #7bcffb35; }
+.world-marker-track[hidden] { display: none; }
+.world-marker-track i { display: block; height: 100%; background: currentColor; }
+.side-objectives { display: grid; gap: 8px; }
+.side-objective-row { display: grid; gap: 4px; }
+.side-objective-heading { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.side-objective-heading span { color: var(--ivory); }
+.side-objective-heading b, .side-objective-row small { color: var(--blue); font-size: 8px; font-weight: 400; letter-spacing: .7px; white-space: nowrap; }
+.side-objective-row[data-status=completed] .side-objective-heading b, .side-objective-row[data-status=completed] small { color: var(--amber); }
+.side-objective-row[data-status=missed] .side-objective-heading b { color: var(--red); }
+.side-objective-track { height: 2px; background: #7894aa35; }
+.side-objective-track i { display: block; height: 100%; background: var(--blue); }
+.side-objective-row[data-status=completed] .side-objective-track i { background: var(--amber); }
+.toast.warning { border-color: #ef9c4f90; color: #ffc26e; }
+.toast.bonus { border-color: #67cdfb90; color: #95e1ff; }
+.result-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.result-stats>div { min-width: 0; }
+.result-stats span { font-size: 8px; letter-spacing: 1px; }
+.result-stats strong { font-size: clamp(17px, 2.5vw, 30px); letter-spacing: 1px; }
+@media(max-width:760px) {
+  .side-objectives { width: 230px; }
+  .result-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 8px; padding: 14px 0; margin: 18px 0; }
+  .result-stats span { font-size: 7px; letter-spacing: .6px; }
+  .result-stats strong { font-size: 20px; }
 }

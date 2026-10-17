@@ -54,7 +54,7 @@ export function createCampaign(episodeId = 'episode4') {
     } : null;
     return {
       episodeId, missionIndex, phase: complete ? 'victory' : mission.type,
-      mission: { ...mission, index: missionIndex, progress, qte: mission.qte?.map((step) => ({ ...step })), sideObjectives: mission.sideObjectives?.map(objective => ({ ...objective })), radio: { ...mission.radio } },
+      mission: { ...JSON.parse(JSON.stringify(mission)), index: missionIndex, progress },
       progress, target: mission.target, radio: radio ? { ...radio } : null,
       qte, complete, failed, reason, elapsed,
       sideObjectives: (mission.sideObjectives || []).map(objective => ({

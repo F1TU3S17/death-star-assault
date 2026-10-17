@@ -1,0 +1,50 @@
+{
+  "laser": {
+    "url": "audio/kenney/laserSmall_000.ogg",
+    "gain": 0.48
+  },
+  "enemyLaser": {
+    "url": "audio/kenney/laserSmall_001.ogg",
+    "gain": 0.4
+  },
+  "turbolaser": {
+    "url": "audio/kenney/laserLarge_000.ogg",
+    "gain": 0.52
+  },
+  "torpedo": {
+    "url": "audio/kenney/thrusterFire_000.ogg",
+    "gain": 0.35
+  },
+  "ion": {
+    "url": "audio/kenney/forceField_000.ogg",
+    "gain": 0.45
+  },
+  "shieldHit": {
+    "url": "audio/kenney/forceField_000.ogg",
+    "gain": 0.38
+  },
+  "hullHit": {
+    "url": "audio/kenney/explosionCrunch_000.ogg",
+    "gain": 0.46
+  },
+  "explosion": {
+    "url": "audio/kenney/lowFrequency_explosion_000.ogg",
+    "gain": 0.65
+  },
+  "ability": {
+    "url": "audio/kenney/spaceEngineLarge_000.ogg",
+    "gain": 0.28
+  },
+  "lock-search": {
+    "url": "audio/rubberduck/beep_01.ogg",
+    "gain": 0.22
+  },
+  "lock-locked": {
+    "url": "audio/rubberduck/terminal_01.ogg",
+    "gain": 0.3
+  },
+  "cue": {
+    "url": "audio/rubberduck/terminal_01.ogg",
+    "gain": 0.28
+  }
+}

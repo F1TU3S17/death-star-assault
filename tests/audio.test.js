@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { createAudio } from '../src/game/audio.js';
 
 class Param {
@@ -12,6 +14,7 @@ class Param {
 function audioFixture(storedMute = false) {
   const originalContext = globalThis.AudioContext;
   const originalStorage = globalThis.localStorage;
+  const originalFetch = globalThis.fetch;
   const contexts = [];
   const storage = new Map([['death-star-assault:muted', String(storedMute)]]);
   class Context {
@@ -46,6 +49,7 @@ function audioFixture(storedMute = false) {
   return { contexts, storage, close() {
     if (originalContext === undefined) delete globalThis.AudioContext; else globalThis.AudioContext = originalContext;
     if (originalStorage === undefined) delete globalThis.localStorage; else globalThis.localStorage = originalStorage;
+    globalThis.fetch = originalFetch;
   } };
 }
 
@@ -127,4 +131,131 @@ test('sound effects have finite envelopes, bounded polyphony and dispose stops/d
     audio.laser(); audio.explosion(); audio.setFlight({ speed: 1, active: true });
     assert.equal(context.nodes.length, count);
   } finally { audio?.dispose(); fixture.close(); }
+});
+
+
+test('mission signals are distinct, rate limited and silent while paused or muted', async () => {
+  const fixture = audioFixture();
+  const audio = createAudio({ manifest: null });
+  try {
+    await audio.start();
+    const context = fixture.contexts[0];
+    const signatures = [];
+    for (const action of [() => audio.astromech(), () => audio.radio(), () => audio.radio('out'), () => audio.lock('locked'), () => audio.incoming(), () => audio.turbolaser(), () => audio.vent(), () => audio.missionCue('success'), () => audio.missionCue('fail')]) {
+      const before = context.sources.length;
+      action();
+      const added = context.sources.slice(before);
+      assert.ok(added.length > 0);
+      signatures.push(JSON.stringify(added.map(source => [source.type, source.frequency?.events, source.startTime])));
+      const count = context.sources.length;
+      action();
+      assert.equal(context.sources.length, count, 'Repeated frame calls must not flood the mixer');
+      for (const source of added) source.end();
+    }
+    assert.equal(new Set(signatures).size, signatures.length);
+    audio.setFlight({ speed: 1, active: true });
+    audio.laser();
+    audio.setPaused(true);
+    const count = context.sources.length;
+    audio.laser(); audio.incoming(); audio.missionCue('objective');
+    assert.equal(context.sources.length, count);
+    assert.ok(context.sources.slice(4).every(source => source.stops.length > 0));
+    audio.setPaused(false);
+    audio.setMuted(true);
+    audio.vent(); audio.turbolaser(); audio.astromech();
+    assert.equal(context.sources.length, count);
+    audio.setMuted(false);
+    audio.laser();
+    assert.ok(context.sources.length > count);
+  } finally { audio.dispose(); fixture.close(); }
+});
+
+test('licensed local sample manifest starts only after gesture and replaces synthesis within voice budget', async () => {
+  const fixture = audioFixture();
+  const requests = [];
+  globalThis.fetch = async url => {
+    requests.push(url);
+    return { ok: true, headers: { get: () => null }, arrayBuffer: async () => new ArrayBuffer(16) };
+  };
+  const manifest = { laser: { url: '/audio/laser.wav', gain: 0.25 }, incoming: { url: '/audio/alarm.wav', gain: 0.3 }, vent: { url: 'https://untrusted.example/file.wav' } };
+  const audio = createAudio({ manifest });
+  try {
+    assert.equal(await audio.loadManifest(manifest), false);
+    assert.equal(requests.length, 0, 'Do not download or decode before user audio activation');
+    await audio.start();
+    const context = fixture.contexts[0];
+    const decoded = { duration: 0.4 };
+    context.decodeAudioData = async () => decoded;
+    assert.equal(await audio.loadManifest(manifest), true);
+    assert.deepEqual(audio.getSampleStatus(), { state: 'ready', events: ['laser', 'incoming'] });
+    assert.equal(requests.length, 2, 'Remote manifest entries are rejected');
+    const before = context.sources.length;
+    audio.laser();
+    assert.equal(context.sources.length, before + 1, 'Sample replaces the oscillator stack');
+    assert.equal(context.sources.at(-1).buffer, decoded);
+    for (let i = 0; i < 100; i++) audio.laser();
+    assert.equal(context.sources.length, before + 24);
+    audio.incoming();
+    assert.equal(context.sources.length, before + 25, 'Priority sampled alarm evicts the oldest voice');
+    audio.setPaused(true);
+    assert.ok(context.sources.slice(before).every(source => source.stops.includes(undefined)));
+    const count = context.sources.length;
+    audio.laser(); audio.setPaused(false); audio.setMuted(true); audio.laser();
+    assert.equal(context.sources.length, count);
+    audio.dispose();
+    assert.equal(audio.getSampleStatus().state, 'disposed');
+    assert.ok(context.nodes.every(node => node.disconnected));
+  } finally { audio.dispose(); fixture.close(); }
+});
+
+test('missing and invalid samples retain audible synth fallback and late decode cannot outlive disposal', async () => {
+  const fixture = audioFixture();
+  const audio = createAudio({ manifest: null });
+  try {
+    await audio.start();
+    const context = fixture.contexts[0];
+    context.decodeAudioData = async () => { throw new Error('Unsupported codec'); };
+    globalThis.fetch = async () => ({ ok: false });
+    assert.equal(await audio.loadManifest({ laser: { url: '/audio/missing.wav' } }), false);
+    globalThis.fetch = async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(10) });
+    assert.equal(await audio.loadManifest({ laser: { url: '/audio/bad.wav' } }), false);
+    const count = context.sources.length;
+    audio.laser();
+    assert.equal(context.sources.length, count + 3, 'Synth stack still sounds after media/decode failure');
+    let resolveDecode;
+    let decoding;
+    const started = new Promise(resolve => { decoding = resolve; });
+    context.decodeAudioData = () => { decoding(); return new Promise(resolve => { resolveDecode = resolve; }); };
+    const loading = audio.loadManifest({ laser: { url: '/audio/slow.wav' } });
+    await started;
+    audio.dispose();
+    resolveDecode({ duration: 1 });
+    assert.equal(await loading, false);
+    assert.deepEqual(audio.getSampleStatus(), { state: 'disposed', events: [] });
+  } finally { audio.dispose(); fixture.close(); }
+});
+
+
+test('bundled audio manifest uses all ten attributed CC0 files with matching hashes', () => {
+  const audioRoot = new URL('../public/audio/', import.meta.url);
+  const manifest = JSON.parse(readFileSync(new URL('manifest.json', audioRoot), 'utf8'));
+  const provenance = JSON.parse(readFileSync(new URL('sources.json', audioRoot), 'utf8'));
+  const used = new Set(Object.values(manifest).map(entry => entry.url.replace(/^audio\//, '')));
+  assert.equal(provenance.assets.length, 10);
+  for (const asset of provenance.assets) {
+    assert.ok(used.has(asset.file), `Bundled file ${asset.file} must have a runtime event`);
+    assert.equal(asset.license, 'CC0-1.0');
+    assert.ok(provenance.sources[asset.creator]);
+    const bytes = readFileSync(new URL(asset.file, audioRoot));
+    assert.equal(bytes.subarray(0, 4).toString(), 'OggS');
+    assert.equal(bytes.length, asset.bytes);
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), asset.sha256);
+  }
+  for (const entry of Object.values(manifest)) {
+    assert.ok(entry.url.startsWith('audio/'));
+    assert.ok(entry.gain > 0 && entry.gain <= 1);
+    assert.ok(provenance.assets.some(asset => `audio/${asset.file}` === entry.url));
+  }
+  assert.match(readFileSync(new URL('kenney/License.txt', audioRoot), 'utf8'), /CC0/);
+  assert.match(readFileSync(new URL('CREDITS.txt', audioRoot), 'utf8'), /rubberduck/);
 });

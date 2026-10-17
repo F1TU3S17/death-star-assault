@@ -1,0 +1,15 @@
+Bundled original science-fiction sound effects; no film recordings.
+
+Kenney — Sci-Fi Sounds (1.0), 2020, CC0 1.0
+Source: https://kenney.nl/assets/sci-fi-sounds
+Archive mirror: https://opengameart.org/content/sci-fi-sounds
+Original license included in kenney/License.txt.
+Files: kenney/*.ogg (8 files).
+
+rubberduck — 50 CC0 sci-fi SFX, CC0 1.0
+Source and license declaration: https://opengameart.org/content/50-cc0-sci-fi-sfx
+Files: rubberduck/beep_01.ogg, rubberduck/terminal_01.ogg.
+
+CC0 legal text: https://creativecommons.org/publicdomain/zero/1.0/
+File sizes and SHA-256 digests: sources.json.
+Runtime event mappings and gain settings: manifest.json.
