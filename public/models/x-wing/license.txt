@@ -1,0 +1,11 @@
+Model Information:
+* title:	X- Wings
+* source:	https://sketchfab.com/3d-models/x-wings-5dc24fdbc09544df9388890bab2434ad
+* author:	perceval-66 (https://sketchfab.com/perceval-66)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "X- Wings" (https://sketchfab.com/3d-models/x-wings-5dc24fdbc09544df9388890bab2434ad) by perceval-66 (https://sketchfab.com/perceval-66) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

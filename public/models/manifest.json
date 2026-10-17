@@ -1,0 +1,181 @@
+{
+  "downloaded": "2026-10-16",
+  "provenance": {
+    "x-wing": "perceval-66, CC BY 4.0; see x-wing/license.txt",
+    "y-wing": "First Strike Development Team, custom noncommercial attribution permission; see y-wing/LICENSE.txt",
+    "tie-fighter": "Alberto Calvo, CC BY 3.0; https://poly.pizza/m/aba7TBlKyJE",
+    "death-star": "Joe Scalise, CC BY 3.0; https://poly.pizza/m/8MIVor30XoN"
+  },
+  "files": [
+    {
+      "file": "models/death-star.glb",
+      "bytes": 95572,
+      "sha256": "fce9de504e43ce08d679eb43f5cdc52b353b014c1566ebae6bb94cd0307ef694"
+    },
+    {
+      "file": "models/death-star.LICENSE.txt",
+      "bytes": 258,
+      "sha256": "a5e51ff829d9ed0d9c9c93f98eb43c9c464f5dbb7fec3614535ac3c1d121b148"
+    },
+    {
+      "file": "models/tie-fighter.glb",
+      "bytes": 120100,
+      "sha256": "bb3a322365e3b89361a001a0867233f1c0b8e25b4289d038a33f57677da90e1c"
+    },
+    {
+      "file": "models/tie-fighter.LICENSE.txt",
+      "bytes": 256,
+      "sha256": "494dec060d4fc5a8630d2a9bfdedae330e6d97045fa9dca9e4ba0a6806de870a"
+    },
+    {
+      "file": "models/x-wing/license.txt",
+      "bytes": 662,
+      "sha256": "f5000d908d255b5babe2245d4e741ecbef533f0ccaa07793bd922c7baafc1d80"
+    },
+    {
+      "file": "models/x-wing/scene.bin",
+      "bytes": 2319960,
+      "sha256": "19a37f920ed01246d928b5ae905f6d470a1c70b7a700e048f1086f4b2df2f60f"
+    },
+    {
+      "file": "models/x-wing/scene.gltf",
+      "bytes": 21358,
+      "sha256": "b2cdac1ea415231bd4508ba3147a1b5a7cd67307abb475c04fda1d3721e979e3"
+    },
+    {
+      "file": "models/x-wing/textures/Ailes_auv_baseColor.png",
+      "bytes": 421402,
+      "sha256": "19622ce3b55e6bf901fa42da5a0e21c769c3f522438d19bf32d0a6039a8f0f5f"
+    },
+    {
+      "file": "models/x-wing/textures/Ailes_auv_metallicRoughness.png",
+      "bytes": 195251,
+      "sha256": "2f9186d08f2f3352b686bd5cd0f31caa5ccb1c6c480956387b875cec6f72a9c2"
+    },
+    {
+      "file": "models/x-wing/textures/Armes_auv_baseColor.png",
+      "bytes": 458595,
+      "sha256": "85040a0ef5526adff3466033d0f47ec966882c7ba322b98224ace3fa8146a930"
+    },
+    {
+      "file": "models/x-wing/textures/Armes_auv_metallicRoughness.png",
+      "bytes": 203107,
+      "sha256": "00036270114238cbd916d6ded59ea15fb729ba01e550caf58b7a05a8ffefa5f4"
+    },
+    {
+      "file": "models/x-wing/textures/Cabine_auv_baseColor.png",
+      "bytes": 251016,
+      "sha256": "a14e43fe59edd62b62bf41331fb65dc7f3f4ba7ab20a439adb0de3dcd201bf48"
+    },
+    {
+      "file": "models/x-wing/textures/Cabine_auv_metallicRoughness.png",
+      "bytes": 115475,
+      "sha256": "2292a8898bb00e634323cfffaa27a94a976533dc30e6e475ef55058562efa316"
+    },
+    {
+      "file": "models/x-wing/textures/Caisse_auv_baseColor.png",
+      "bytes": 375239,
+      "sha256": "95ef3c02e1c3cc440c27b03e216de02b9feade807f9a80c0186741ed62952bf4"
+    },
+    {
+      "file": "models/x-wing/textures/Caisse_auv_metallicRoughness.png",
+      "bytes": 183551,
+      "sha256": "d0561b85655d15a0c3dc72916e4039f1464f2942f8ea97844575b7a45c853924"
+    },
+    {
+      "file": "models/x-wing/textures/Moteur-Arriere_a_baseColor.png",
+      "bytes": 250388,
+      "sha256": "5bd46f2d837690e458eb86a3f8c3d519ff2e5a4d1bf3b595931257c87550644c"
+    },
+    {
+      "file": "models/x-wing/textures/Moteur-Arriere_a_metallicRoughness.png",
+      "bytes": 187447,
+      "sha256": "1b1266e43dcec377d3ef02c85210f3e9f384cca09a6ec0628f5ea670e7a4c72b"
+    },
+    {
+      "file": "models/x-wing/textures/Moteurs_auv_baseColor.png",
+      "bytes": 686537,
+      "sha256": "6753d18c49b9645c8c779b146e4df21a91d35930df025d54c6fa9cbb73990af0"
+    },
+    {
+      "file": "models/x-wing/textures/Moteurs_auv_metallicRoughness.png",
+      "bytes": 265268,
+      "sha256": "f8e2308922d9099e25da2beb55dc0266bb64dcbdf8879a020125b3ce2055a7aa"
+    },
+    {
+      "file": "models/x-wing/textures/Moteur_Haut_auv_baseColor.png",
+      "bytes": 245159,
+      "sha256": "b2ec02a3aba57a0eb886bff1aedf982f54ae951e8cf2a8d167c10072cc03d1eb"
+    },
+    {
+      "file": "models/x-wing/textures/Moteur_Haut_auv_metallicRoughness.png",
+      "bytes": 185525,
+      "sha256": "f9ea5909c22cc12587feb77766499fb9cfc31157724e5dc33d88fe941847faef"
+    },
+    {
+      "file": "models/x-wing/textures/Nez_auv_baseColor.png",
+      "bytes": 429057,
+      "sha256": "c865be1889a2573b1f6b6d9586117e838588f85ebaebf52b0f1118a7056dba91"
+    },
+    {
+      "file": "models/x-wing/textures/Nez_auv_metallicRoughness.png",
+      "bytes": 215166,
+      "sha256": "ef8833ff776cf3d2375256a3a094617289fb2be2a982aea686570fe7e5351690"
+    },
+    {
+      "file": "models/y-wing/LICENSE.txt",
+      "bytes": 1075,
+      "sha256": "c6e583b0648588bd1cbbc131daa17bd60693dc7fd70401280801a1a88c63111c"
+    },
+    {
+      "file": "models/y-wing/scene.bin",
+      "bytes": 890352,
+      "sha256": "0c8f85133127d1014ce87d7cb2b93e077b26935f9fdc2c9f86f4caca627d65c9"
+    },
+    {
+      "file": "models/y-wing/scene.gltf",
+      "bytes": 5214,
+      "sha256": "7c19fd28e67d266ceb1952f87f8d30318d07e437117d067d5b2776303e97ebda"
+    },
+    {
+      "file": "models/y-wing/wreck_y-wing_c.png",
+      "bytes": 177051,
+      "sha256": "18a3c9b0b59b302157ee18b86951ca4a92028954739d62386d41092a49d21b85"
+    },
+    {
+      "file": "models/y-wing/y-wing.fbx",
+      "bytes": 1088064,
+      "sha256": "3a03e358cb1a5113bae5a5d7da9f31f365cde634018d223f96affad8e37148e0"
+    },
+    {
+      "file": "models/y-wing/y-wingcannon_b.png",
+      "bytes": 91,
+      "sha256": "5d7182be6e1384e114af8ba12cc1d39bdd2de98c4998b796e1c4003de3a2ad32"
+    },
+    {
+      "file": "models/y-wing/y-wingcannon_c.png",
+      "bytes": 284008,
+      "sha256": "80cd04c379e170b645b304ab8924fc4bca5cbad6971f145e132bb2abcf04891f"
+    },
+    {
+      "file": "models/y-wing/y-wingcockpit_b.png",
+      "bytes": 310365,
+      "sha256": "cf257c6a6d5ef05f49bcc278b61b210d773bb3deecc468daaa68b0e7727a89f5"
+    },
+    {
+      "file": "models/y-wing/y-wingcockpit_c.png",
+      "bytes": 662144,
+      "sha256": "5cd74bd26a8d35d7ed9d01d27555c7fbea87caeddd8f80c2ebf36b7977ba4600"
+    },
+    {
+      "file": "models/y-wing/y-wing_b.png",
+      "bytes": 265525,
+      "sha256": "8934bc898e85ea6b7701e7ea3ffc9e77965583a0f6d3826582bd8e52d7dc6d5f"
+    },
+    {
+      "file": "models/y-wing/y-wing_c.png",
+      "bytes": 1606178,
+      "sha256": "593a3890d3e2fa18c8f314f76d763568b43c4868b90481c8e69bcfc25a2c7f1c"
+    }
+  ]
+}

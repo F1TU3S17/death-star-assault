@@ -1,0 +1,290 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "THREE.GLTFExporter r180",
+    "extras": {
+      "source": "First Strike Development Team; FBX conversion by MichaelEGA/Open Galaxy",
+      "license": "Noncommercial reuse with attribution; see LICENSE.txt",
+      "modifications": "Intact y_wing__P1 extracted; wrecks and alternative LODs removed; FBX converted to glTF 2.0; original diffuse assigned"
+    }
+  },
+  "scenes": [
+    {
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "scene": 0,
+  "nodes": [
+    {
+      "name": "y_wing__P1",
+      "extras": {
+        "originalName": "y_wing__P1",
+        "transformData": {
+          "eulerOrder": "ZYX",
+          "parentMatrix": {
+            "elements": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "parentMatrixWorld": {
+            "elements": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          }
+        }
+      },
+      "mesh": 0
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 197856,
+      "target": 34962,
+      "byteStride": 12
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 197856,
+      "byteLength": 197856,
+      "target": 34962,
+      "byteStride": 12
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 395712,
+      "byteLength": 197856,
+      "target": 34962,
+      "byteStride": 12
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 593568,
+      "byteLength": 131904,
+      "target": 34962,
+      "byteStride": 8
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 725472,
+      "byteLength": 131904,
+      "target": 34962,
+      "byteStride": 8
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 857376,
+      "byteLength": 6240,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 863616,
+      "byteLength": 26736,
+      "target": 34963
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 890352,
+      "uri": "scene.bin"
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 16488,
+      "max": [
+        44.00657653808594,
+        16.54952621459961,
+        85.73822784423828
+      ],
+      "min": [
+        -44.195640563964844,
+        -10.041313171386719,
+        -83.05769348144531
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 16488,
+      "max": [
+        1,
+        1,
+        1
+      ],
+      "min": [
+        1,
+        1,
+        1
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 16488,
+      "max": [
+        1,
+        1,
+        1
+      ],
+      "min": [
+        -1,
+        -1,
+        -1
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5126,
+      "count": 16488,
+      "max": [
+        1,
+        1
+      ],
+      "min": [
+        0.001256000017747283,
+        -0.001479029655456543
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 4,
+      "componentType": 5126,
+      "count": 16488,
+      "max": [
+        0.9107511639595032,
+        0.9691961407661438
+      ],
+      "min": [
+        0.9107511639595032,
+        0.9691961407661438
+      ],
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 5,
+      "componentType": 5123,
+      "count": 3120,
+      "max": [
+        3119
+      ],
+      "min": [
+        0
+      ],
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 6,
+      "componentType": 5123,
+      "count": 13368,
+      "max": [
+        16487
+      ],
+      "min": [
+        3120
+      ],
+      "type": "SCALAR"
+    }
+  ],
+  "materials": [
+    {
+      "pbrMetallicRoughness": {
+        "metallicFactor": 0.12,
+        "roughnessFactor": 0.82,
+        "baseColorTexture": {
+          "index": 0
+        }
+      },
+      "name": "First Strike Y-wing hull"
+    },
+    {
+      "pbrMetallicRoughness": {
+        "metallicFactor": 0.12,
+        "roughnessFactor": 0.82,
+        "baseColorTexture": {
+          "index": 0
+        }
+      },
+      "name": "First Strike Y-wing hull"
+    }
+  ],
+  "meshes": [
+    {
+      "primitives": [
+        {
+          "mode": 4,
+          "attributes": {
+            "POSITION": 0,
+            "COLOR_0": 1,
+            "NORMAL": 2,
+            "TEXCOORD_0": 3,
+            "TEXCOORD_1": 4
+          },
+          "indices": 5,
+          "material": 0
+        },
+        {
+          "mode": 4,
+          "attributes": {
+            "POSITION": 0,
+            "COLOR_0": 1,
+            "NORMAL": 2,
+            "TEXCOORD_0": 3,
+            "TEXCOORD_1": 4
+          },
+          "indices": 6,
+          "material": 1
+        }
+      ]
+    }
+  ],
+  "images": [
+    {
+      "uri": "y-wing_c.png"
+    }
+  ],
+  "textures": [
+    {
+      "source": 0
+    }
+  ]
+}

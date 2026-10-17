@@ -1,0 +1,20 @@
+Y-wing model and textures: First Strike Development Team.
+FBX/PNG conversion: MichaelEGA / Open Galaxy.
+Public release permission (Dnamro, August 7, 2023):
+https://www.moddb.com/mods/first-strike/news/public-release-of-first-strike-models
+
+The release permits reuse with credit to the First Strike Development Team,
+provided the models are not sold, used in a commercial project, or claimed
+as the reuser's work. This is a custom noncommercial permission, not Apache
+2.0 and not Creative Commons. Preserve this notice with redistributed assets.
+
+Download mirror:
+https://github.com/MichaelEGA/Open-Galaxy/tree/main/Assets/Data/objects/ships/firststrike/y-wing
+
+Changes in this project: extracted intact y_wing__P1 geometry from y-wing.fbx;
+removed wreck fragments and alternative detail meshes; converted to glTF 2.0;
+assigned the original y-wing_c.png diffuse texture to both hull primitives.
+Original FBX and PNGs are retained. No changes to texture pixels.
+
+Downloaded and converted: 2026-10-16.
+Star Wars names and ship designs belong to their respective rights holders.
