@@ -40,7 +40,7 @@ test('a physically reached escort waypoint spawns one optional marked intercepto
   try {
     const { game, debug } = fixture;
     game.start(); engineReachPhase(debug, 'escort');
-    assert.equal(debug.inspect().enemies.some(enemy => enemy.bonusOnly), false);
+    assert.deepEqual(debug.inspect().enemies.filter(enemy => enemy.bonusOnly).map(enemy => enemy.id).sort(), ['escort-power-node', 'escort-route-battery']);
     fixture.key('ControlLeft');
     // Follow the real moving formation without modifying its ships, health or waypoint state.
     for (let frame = 0; frame < 300 && game.getSnapshot().mission.count === 0; frame++) {
@@ -50,7 +50,7 @@ test('a physically reached escort waypoint spawns one optional marked intercepto
     }
     assert.equal(game.getSnapshot().phase, 'escort');
     assert.equal(game.getSnapshot().mission.count, 1);
-    const marked = debug.inspect().enemies.filter(enemy => enemy.bonusOnly);
+    const marked = debug.inspect().enemies.filter(enemy => enemy.bonusOnly && enemy.kind === 'tie');
     assert.deepEqual(marked.map(enemy => enemy.id).sort(), ['escort-ace-1', 'escort-ace-2']);
     assert.ok(marked.every(enemy => enemy.kind === 'tie' && enemy.variant === 'ace'));
     const event = fixture.events.find(event => event.type === 'spawn-wave' && event.waveId === 'escort-flank');

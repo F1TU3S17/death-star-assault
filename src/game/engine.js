@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createCampaign } from './campaign.js';
 import { createMissionDirector } from './mission-events.js';
+import { createEscortTactics } from './escort-tactics.js';
 import { createMissionProp } from './mission-props.js';
 import { createEnemyBrain, updateEnemyBrain, interceptPoint } from './enemy-ai.js';
 import { SHIPS } from './data.js';
@@ -97,6 +98,8 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   };
   const campaign = createCampaign('episode4');
   const missionDirector = createMissionDirector();
+  const escortTactics = createEscortTactics();
+  let escortChoicePending = false;
   const missionProps = [];
   let entitySerial = 0;
   let ventDamageCooldown = 0;
@@ -232,6 +235,8 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   }
   function clearCombat() {
     targetLock.reset();
+    escortTactics.reset();
+    escortChoicePending = false;
     for (const prop of missionProps) { scene.remove(prop.mesh); prop.dispose(); }
     missionProps.length = 0;
     for (const enemy of enemies) removeEntity(enemy);
@@ -289,6 +294,32 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     }
   }
 
+  function handleEscortTactics(events) {
+    for (const event of events) {
+      for (const id of event.disableTargetIds || []) {
+        const battery = enemies.find(enemy => enemy.id === id);
+        if (!battery || battery.disabled) continue;
+        battery.disabled = true;
+        battery.aiState = 'disabled';
+        battery.telegraph = false;
+        battery.mesh.userData.attackTelegraph = false;
+        battery.velocity.set(0, 0, 0);
+        targetLock.invalidate(id);
+        burst(battery.mesh.position, 3, 3);
+      }
+      if (event.allyShieldRestore) {
+        for (const ally of allies) ally.shields = Math.min(ally.maxShields, ally.shields + event.allyShieldRestore);
+      }
+      if (event.type === 'escort-threat-disabled' || event.type === 'escort-battery-disabled') {
+        audio.cue();
+        onEvent({ type: 'radio', speaker: 'Золотой Два', text: event.allyShieldRestore
+          ? 'Питание батареи снято! Золотая группа, перераспределяем энергию на щиты.'
+          : 'Батарея уничтожена. TIE и питающий узел остаются вашими целями.' });
+      }
+      onEvent(event);
+    }
+  }
+
   function setupMissionContent(phase) {
     missionDirector.enterPhase(phase);
     ventDamageCooldown = 0;
@@ -324,6 +355,17 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       speedRatio: speed / stats.speed, killCount: state.progress, escortCheckpoint: state.phase === 'escort' ? state.progress : 0,
       allyHealth: allies.length ? Math.min(...allies.map(ally => ally.health / ally.maxHealth * 100)) : NaN,
     }));
+    if (state.phase === 'escort') {
+      if (escortChoicePending) {
+        escortChoicePending = false;
+        onEvent({ id: 'escort-tactics:priority-choice', type: 'radio', speaker: 'Золотой Лидер',
+          text: 'Три угрозы: TIE атакуют строй; тяжёлая батарея держит маршрут; дальний питающий узел отключит её и даст время восстановить щиты. Выберите приоритет.' });
+      }
+      handleEscortTactics(escortTactics.update({
+        allyHealth: allies.length ? Math.min(...allies.map(ally => ally.health / ally.maxHealth * 100)) : 0,
+        escortCheckpoint: state.progress,
+      }));
+    }
     const content = missionDirector.getSnapshot();
     ventDamageCooldown = Math.max(0, ventDamageCooldown - dt);
     for (const prop of missionProps) {
@@ -377,6 +419,12 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       relaysDestroyed = 0;
       shields = Math.max(shields, stats.shield * 0.8);
     } else if (phase === 'escort') {
+      escortTactics.begin();
+      escortChoicePending = true;
+      const routeBattery = spawnTurret(190, 250, 'heavy');
+      Object.assign(routeBattery, { id: 'escort-route-battery', bonusOnly: true, disabled: false });
+      const powerNode = spawnTurret(-580, -650, 'relay');
+      Object.assign(powerNode, { id: 'escort-power-node', bonusOnly: true, health: 85, radius: 14 });
       player.position.set(0, 125, 1100);
       player.quaternion.identity();
       escortAnchor.set(0, 90, 700);
@@ -450,7 +498,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     let score = profile.lockDot ?? 0.96;
     const trackedId = targetLock.snapshot().targetId;
     for (const enemy of enemies) {
-      if (enemy.health <= 0 || enemy.retreat || !insideLockCone(player.position, forward, enemy.mesh.position, profile.lockDot ?? 0.96, profile.range || 1400)) continue;
+      if (enemy.health <= 0 || enemy.disabled || enemy.retreat || !insideLockCone(player.position, forward, enemy.mesh.position, profile.lockDot ?? 0.96, profile.range || 1400)) continue;
       const projected = projectTarget(enemy);
       if (!projected || projected.x < 0 || projected.x > 1 || projected.y < 0 || projected.y > 1 || !stationLineOfSight(player.position, enemy.mesh.position, campaign.getSnapshot().phase)) continue;
       if (enemy.id === trackedId) return enemy;
@@ -483,7 +531,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     // camera lag and cockpit view cannot share a fixed HUD percentage.
     camera.updateMatrixWorld();
     const reticlePoint = player.position.clone().addScaledVector(forward, 1000).project(camera);
-    const target = enemies.filter(enemy => enemy.health > 0)
+    const target = enemies.filter(enemy => enemy.health > 0 && !enemy.disabled)
       .map(enemy => ({ enemy, dot: enemy.mesh.position.clone().sub(player.position).normalize().dot(forward) }))
       .sort((a, b) => b.dot - a.dot)[0];
     const displayedTarget = lockCandidate || target?.enemy;
@@ -521,17 +569,18 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       heat: Math.round(heat * 100), abilityCooldown: Math.max(0, abilityCooldown), abilityActive: abilityRemaining > 0,
       weapon: { id: selectedWeapon.id, name: selectedWeapon.name, ammo: selectedWeapon.ammo, reserve: selectedWeapon.reserve, cooldown: selectedWeapon.cooldown, reloading: selectedWeapon.reloading, reloadRemaining: selectedWeapon.reloadRemaining, reloadDuration: selectedWeapon.reloadDuration, locked, lockProgress: lock.progress, lockStatus: lock.status, lockDuration: lock.duration, lockTargetId: lockCandidate?.id || null, guidance: locked ? 'guided' : 'unguided' },
       weapons: availableWeapons,
-      kills, targetCount: enemies.length, elapsed: totalElapsed,
+      kills, targetCount: enemies.filter(enemy => !enemy.disabled).length, elapsed: totalElapsed,
       mission: active ? { ...state.mission, progress: Math.round(state.progress / state.target * 100), count: state.progress, target: state.target } : null,
       qte: mode === 'qte' ? state.qte : null,
       targeting: visibleTarget && (lockCandidate || target?.dot > .3) ? { ...visibleTarget, id: displayedTarget.id, lockProgress: lockCandidate?.id === lock.targetId ? lock.progress : 0, locked } : null,
       lead,
-      targets: enemies.map(projectTarget).filter(Boolean), objectiveMarker,
+      targets: enemies.filter(enemy => !enemy.disabled).map(projectTarget).filter(Boolean), objectiveMarker,
       allies: allies.map(ally => ({ id: ally.id, name: ally.name, kind: ally.kind, health: Math.round(ally.health / ally.maxHealth * 100), shields: Math.round(ally.shields / ally.maxShields * 100), distance: Math.round(ally.mesh.position.distanceTo(player.position)), position: { x: ally.mesh.position.x, y: ally.mesh.position.y, z: ally.mesh.position.z } })),
       fleetHealth: allies.length ? Math.round(allies.reduce((total, ally) => total + ally.health / ally.maxHealth, 0) / allies.length * 100) : null,
+      escortTactics: state.phase === 'escort' ? escortTactics.snapshot() : null,
       escortDistance: state.phase === 'escort' ? Math.max(0, escortAnchor.z - (escortWaypoints[state.progress] ?? escortAnchor.z)) : null,
       sideObjectives: [...(state.sideObjectives || []), ...content.sideObjectives], content,
-      worldMarkers: [...content.sideObjectives.flatMap(objective => {
+      worldMarkers: [...(state.phase === 'escort' ? enemies.filter(enemy => !enemy.disabled && ['escort-route-battery', 'escort-power-node'].includes(enemy.id)).map(enemy => ({ id: enemy.id, position: enemy.mesh.position, label: enemy.id === 'escort-route-battery' ? 'ТЯЖЁЛАЯ БАТАРЕЯ' : 'ПИТАЮЩИЙ УЗЕЛ · ЩИТЫ +25' })) : []), ...content.sideObjectives.flatMap(objective => {
         if (objective.status !== 'active') return [];
         if (objective.kind === 'scan') return [{ id: objective.id, position: objective.position, label: 'ДАТЧИК · CTRL / СКАН', progress: objective.progress / objective.target }];
         const ids = objective.targetIds || [objective.targetId];
@@ -543,7 +592,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
         return distance < 1800 && point.z > -1 && point.z < 1 && Math.abs(point.x) < 1 && Math.abs(point.y) < 1
           ? [{ id: marker.id, x: point.x * 0.5 + 0.5, y: 0.5 - point.y * 0.5, distance: Math.round(distance), label: marker.label, status: 'active', progress: marker.progress || 0 }] : [];
       }),
-      enemies: enemies.map(enemy => {
+      enemies: enemies.filter(enemy => !enemy.disabled).map(enemy => {
         const relative = enemy.mesh.position.clone().sub(player.position).applyQuaternion(player.quaternion.clone().invert());
         return { bearing: Math.atan2(relative.x, -relative.z), distance: relative.length(), kind: enemy.kind, aiState: enemy.aiState || 'tracking', aiTarget: enemy.aiTarget || 'player', telegraph: Boolean(enemy.telegraph), evading: Boolean(enemy.evading) };
       }),
@@ -620,6 +669,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     removeEntity(enemy);
     enemies.splice(enemies.indexOf(enemy), 1);
     kills += 1;
+    if (campaign.getSnapshot().phase === 'escort') handleEscortTactics(escortTactics.recordDestroyed(enemy.id, { kind: enemy.kind }));
     handleMissionEvents(missionDirector.recordTargetDestroyed(enemy.id));
     if (enemy.kind === 'relay' && !enemy.bonusOnly) {
       relaysDestroyed += 1;
@@ -692,7 +742,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       wingman.life -= dt;
       wingman.age += dt;
       wingman.fireTimer -= dt;
-      const target = wingman.target && enemies.includes(wingman.target) && wingman.target.health > 0 && !wingman.target.retreat ? wingman.target : null;
+      const target = wingman.target && enemies.includes(wingman.target) && wingman.target.health > 0 && !wingman.target.disabled && !wingman.target.retreat ? wingman.target : null;
       if (!target) wingman.target = null;
       let direction;
       if (target && wingman.mesh.position.distanceTo(target.mesh.position) > 105) {
@@ -860,7 +910,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     const retired = [];
     const incoming = projectiles.filter(bolt => bolt.owner !== 'enemy').map(bolt => ({ owner: bolt.owner, position: bolt.mesh.position, velocity: bolt.velocity }));
     for (const enemy of enemies) {
-      if (enemy.kind === 'relay') continue;
+      if (enemy.kind === 'relay' || enemy.disabled) continue;
       if (enemy.retreat) {
         enemy.aiState = 'retreat';
         enemy.telegraph = false;
@@ -947,7 +997,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       burst(bolt.mesh.position, 0, 7);
       audio.explosion();
       for (const enemy of enemies) {
-        if (enemy.health <= 0 || enemy.retreat) continue;
+        if (enemy.health <= 0 || enemy.disabled || enemy.retreat) continue;
         const damage = enemy === directTarget ? bolt.damage : splashDamage(enemy.mesh.position.distanceTo(bolt.mesh.position), bolt.profile.splashRadius, bolt.profile.splashDamage);
         enemy.health -= damage;
         if (enemy.health <= 0) destroyed.push(enemy);
@@ -958,7 +1008,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       const bolt = projectiles[i];
       const previous = bolt.mesh.position.clone();
       if (bolt.type === 'torpedo' && bolt.target) {
-        if (!enemies.includes(bolt.target) || bolt.target.health <= 0) bolt.target = null;
+        if (!enemies.includes(bolt.target) || bolt.target.health <= 0 || bolt.target.disabled) bolt.target = null;
         else {
           const desired = bolt.target.mesh.position.clone().addScaledVector(bolt.target.velocity, Math.min(0.4, bolt.target.mesh.position.distanceTo(bolt.mesh.position) / bolt.profile.speed)).sub(bolt.mesh.position).normalize();
           const current = bolt.velocity.clone().normalize();
@@ -975,7 +1025,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       bolt.life -= dt;
       if (bolt.owner === 'player' || bolt.owner === 'friendly') {
         for (const enemy of enemies) {
-          if (enemy.health <= 0 || enemy.retreat || !segmentSphereHit(previous, bolt.mesh.position, enemy.mesh.position, enemy.radius)) continue;
+          if (enemy.health <= 0 || enemy.disabled || enemy.retreat || !segmentSphereHit(previous, bolt.mesh.position, enemy.mesh.position, enemy.radius)) continue;
           if (bolt.type === 'torpedo') detonate(bolt, enemy);
           else {
             enemy.health -= bolt.damage;
@@ -1312,7 +1362,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       burst(player.position, 3, 2);
     } else {
       const forward = FORWARD.clone().applyQuaternion(player.quaternion);
-      const nearest = enemies.filter(enemy => enemy.mesh.position.distanceTo(player.position) < (stats.ability.radius || 320))
+      const nearest = enemies.filter(enemy => !enemy.disabled && enemy.mesh.position.distanceTo(player.position) < (stats.ability.radius || 320))
         .filter(enemy => enemy.mesh.position.clone().sub(player.position).normalize().dot(forward) > 0.4)
         .sort((a, b) => a.mesh.position.distanceToSquared(player.position) - b.mesh.position.distanceToSquared(player.position))[0];
       if (nearest) {
@@ -1435,7 +1485,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       content: missionDirector.getSnapshot(),
       missionProps: missionProps.map(prop => ({ id: prop.id, kind: prop.kind, position: prop.mesh.position.toArray() })),
       audio: audio.getSampleStatus?.() || { state: 'unavailable', events: [] },
-      enemies: enemies.map(enemy => ({ id: enemy.id, bonusOnly: Boolean(enemy.bonusOnly), kind: enemy.kind, variant: enemy.variant, health: enemy.health, stunned: enemy.stun, retreat: Boolean(enemy.retreat), position: enemy.mesh.position.toArray(), quaternion: enemy.mesh.quaternion.toArray(), velocity: enemy.velocity.toArray(), aiState: enemy.aiState || 'tracking', aiTarget: enemy.aiTarget || 'player', telegraph: Boolean(enemy.telegraph), evading: Boolean(enemy.evading), lastShotAt: enemy.lastShotAt ?? null, aimDirection: enemy.aiAim ? [enemy.aiAim.x, enemy.aiAim.y, enemy.aiAim.z] : null, model: enemy.mesh.userData.modelStatus })),
+      enemies: enemies.map(enemy => ({ id: enemy.id, bonusOnly: Boolean(enemy.bonusOnly), disabled: Boolean(enemy.disabled), kind: enemy.kind, variant: enemy.variant, health: enemy.health, stunned: enemy.stun, retreat: Boolean(enemy.retreat), position: enemy.mesh.position.toArray(), quaternion: enemy.mesh.quaternion.toArray(), velocity: enemy.velocity.toArray(), aiState: enemy.aiState || 'tracking', aiTarget: enemy.aiTarget || 'player', telegraph: Boolean(enemy.telegraph), evading: Boolean(enemy.evading), lastShotAt: enemy.lastShotAt ?? null, aimDirection: enemy.aiAim ? [enemy.aiAim.x, enemy.aiAim.y, enemy.aiAim.z] : null, model: enemy.mesh.userData.modelStatus })),
       allies: allies.map(ally => ({ id: ally.id, name: ally.name, kind: ally.kind, health: ally.health, shields: ally.shields, position: ally.mesh.position.toArray(), velocity: ally.velocity.toArray() })),
       supportWingmen: supportWingmen.map(wingman => ({ id: wingman.id, position: wingman.mesh.position.toArray(), life: wingman.life, targetPosition: wingman.target?.mesh.position.toArray() || null })),
       sfoilsRig: shipMesh.userData.sfoils ? { ...shipMesh.userData.sfoils } : null,

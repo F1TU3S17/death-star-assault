@@ -20,6 +20,9 @@ src/game/data.js           Ship/episode/mission configuration (plain exported da
 src/game/campaign.js       Pure campaign progression and QTE state machine
 src/game/mission-events.js Optional objectives, radio triggers and vent schedule
 src/game/mission-props.js  Physical sensor and animated coolant vent props
+src/game/flight-model.js   Inertial velocity, turning authority and ship handling
+src/game/targeting.js      Timed same-target lock, analytic cover and lead solution
+src/game/escort-tactics.js Pure escort choices and once-only consequence events
 src/game/world.js          Model loading, station geometry and cinematic sets
 src/game/world-detail.js   Seeded instanced trench modules, station texture and normal maps
 src/game/detailed-cockpit.js Open Galaxy X-wing cockpit loader and Y-wing fallback
@@ -87,6 +90,10 @@ Events use `{ type, ...payload }`: `radio` has `{ speaker, text }`; `mission-com
 Episode IV admits X-wing and Y-wing. A-wing may be displayed as locked for a future Episode VI; its later history and gameplay abilities must not be silently presented as Yavin participants. Gameplay values are explicitly balance abstractions; equipment descriptions require canon sources.
 
 ## Simulation requirements
+
+Flight persists an actual velocity vector; observed enemy interception uses this velocity rather than the nose direction. Turn authority peaks near 70% cruise speed. Brake-turn coasting is suppressed inside the trench, and teleports/collisions reset momentum. Lasers retain the firing axis; the lead solution affects HUD only. Torpedo guidance requires 1.7 simulation seconds on one eligible visible target; loss disables guidance immediately while progress decays. Early launches remain finite-ammunition unguided rounds. The targeting HUD owns reusable lead/ring DOM nodes and no simulation state.
+
+Escort decisions are collision-confirmed events. A physical route battery and remote power node are independent of waypoint progression. Node destruction disables the battery and restores at most 25 actual shield units per surviving ally once; direct battery destruction leaves the node available. Disabled batteries leave targeting/radar and cannot fire. No abstract pressure timer deals damage: enemy projectiles remain authoritative.
 
 `createMissionDirector` observes the campaign without advancing its main goals. It owns optional scan dwell, marked ambush targets, bonus points, radio triggers and the coolant vent warning/open/close cycle. The engine supplies physical position, facing, speed and destroyed target IDs; pause freezes all observations. Destruction is recorded immediately so a final kill cannot lose its optional reward during a phase transition. `mission-props.js` owns disposable sensor/vent geometry; snapshots supply projected `worldMarkers` and objective history to the HUD.
 

@@ -17,4 +17,15 @@ Each task has one writer and an explicit file boundary. Agents deliver tested ar
 - **Isolation:** exclusive file ownership; coordinator-only shared-file integration in order V → F1 → T1 → M1. Prepared modules may coexist without being imported by the running game.
 - **Durability:** each accepted runtime transaction becomes a separate Git commit with validation recorded. Push accepted commits to the authorized GitHub repository; do not publish Sites updates.
 
-This is an engineering workflow, not a claim of database transactions or automatic rollback. Shared-file integration already started before the ownership change was saved outside the repository, then removed from the visual baseline. It will be reintroduced sequentially after review.
+This is an engineering workflow, not a claim of database transactions or automatic rollback. Shared-file integration started before the ownership change was saved outside the repository, removed from the visual baseline, then reviewed and reintroduced sequentially.
+
+## Acceptance log
+
+| Transaction | Durable checkpoint | Validation |
+| --- | --- | --- |
+| V | `993042d` | 95 tests without skips; final touch equipment adjustment passed its separate responsive test; native 1672 × 941 concept comparison |
+| F1 | `7cd289b` | 29 related tests, including real brake-turn momentum, pause/reset and physical campaign completion; production build |
+| T1 + T2 feedback | `6a5c8de` | 95 non-browser tests, manual-axis and timed-lock integration checks; production build |
+| M1 + M2 integration | This commit | 22 focused checks, including real target kills, once-only shield restoration, disabled battery firing and preserved checkpoints |
+
+Final combined gate: **101/101 tests passed**, zero skips/cancellations, including independent responsive and desktop Chromium/WebGL scenarios; production build succeeded. Console/resource, finite ammunition, pause, QTE, defeat/retry, victory, target-lock HUD and physical campaign checks passed. Software-rendered timings do not establish hardware GPU performance. Sites remains unchanged.

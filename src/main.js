@@ -357,7 +357,9 @@ function render(state) {
     }));
   }
   const nearestAlly = Math.min(...allies.filter(ally => ally.health > 0).map(ally => ally.distance));
-  $('escort-hint').textContent = Number.isFinite(nearestAlly) ? `${Math.round(nearestAlly)} М ДО ГРУППЫ${nearestAlly > 700 ? ' · ПРИБЛИЗЬТЕСЬ К СОЮЗНИКАМ' : ' · ДЕРЖИТЕ ПРИКРЫТИЕ'}` : '';
+  const battery = state.escortTactics?.threats.find(threat => threat.id === 'escort-route-battery');
+  const batteryHint = battery ? ` · БАТАРЕЯ ${battery.disabled ? 'ОТКЛЮЧЕНА' : 'АКТИВНА'}` : '';
+  $('escort-hint').textContent = Number.isFinite(nearestAlly) ? `${Math.round(nearestAlly)} М ДО ГРУППЫ${nearestAlly > 700 ? ' · ПРИБЛИЗЬТЕСЬ К СОЮЗНИКАМ' : ' · ДЕРЖИТЕ ПРИКРЫТИЕ'}${batteryHint}` : '';
   updateSideObjectives(state.sideObjectives, mode);
   updateWorldMarkers(state.worldMarkers, mode, state.reticle);
   const targeting = state.targeting || (state.objectiveMarker ? { ...state.objectiveMarker, kind: 'gate' } : null);
