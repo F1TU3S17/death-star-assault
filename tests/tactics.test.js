@@ -164,23 +164,36 @@ test('a real support bolt crossing the player cannot damage shields or hull', as
   } finally { fixture.close(); }
 });
 
-test('S-foils close during boost, open before firing, and respect manual X control', async () => {
+test('boost permits fire with locked-open S-foils; closed and moving wings interlock weapons', async () => {
   const fixture = await engineHarness();
   try {
     const { game, debug } = fixture;
     game.start();
     fixture.key('ShiftLeft'); debug.step(1.3);
-    assert.ok(game.getSnapshot().sfoils.openness < 0.1);
+    assert.equal(game.getSnapshot().sfoils.openness, 1);
+    const boostSpeed = game.getSnapshot().speed;
     fixture.key('Space'); debug.step(0.2);
-    assert.equal(debug.inspect().projectileDetails.some(projectile => projectile.owner === 'player'), false);
-    debug.step(0.9);
-    assert.ok(game.getSnapshot().sfoils.openness > 0.8);
     assert.ok(debug.inspect().projectileDetails.some(projectile => projectile.owner === 'player'));
-    fixture.key('Space', false); fixture.key('ShiftLeft', false);
+    assert.ok(game.getSnapshot().speed >= boostSpeed, 'firing must not cancel acceleration');
+    fixture.key('Space', false);
     fixture.key('KeyX'); fixture.key('KeyX', false);
-    debug.step(2);
+    debug.step(3);
     assert.equal(game.getSnapshot().sfoils.mode, 'closed');
-    assert.ok(game.getSnapshot().sfoils.openness < 0.1);
+    assert.equal(game.getSnapshot().sfoils.openness, 0);
+    game.selectWeapon('proton-torpedo');
+    const ammo = game.getSnapshot().weapon.ammo;
+    fixture.key('Space'); debug.step(0.5);
+    assert.equal(game.getSnapshot().sfoils.mode, 'closed');
+    assert.equal(game.getSnapshot().weapon.ammo, ammo);
+    assert.equal(debug.inspect().projectileDetails.some(projectile => projectile.owner === 'player'), false);
+    fixture.key('KeyX'); fixture.key('KeyX', false);
+    debug.step(0.2);
+    assert.equal(game.getSnapshot().weapon.ammo, ammo, 'no shot while unfolding');
+    debug.step(2.8);
+    assert.equal(game.getSnapshot().sfoils.openness, 1);
+    assert.ok(game.getSnapshot().weapon.ammo < ammo);
+    assert.ok(game.getSnapshot().speed >= boostSpeed, 'boost stays held through the full wing cycle');
+    fixture.key('Space', false); fixture.key('ShiftLeft', false);
     game.start({ shipId: 'ywing' });
     assert.equal(game.getSnapshot().sfoils.available, false);
     assert.equal(game.toggleSfoils(), false);

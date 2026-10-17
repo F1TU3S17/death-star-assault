@@ -274,9 +274,15 @@ test('browser renders downloaded models and supports controls, QTE, defeat/repla
     assert.ok(closedRig.loadedRig && closedRig.wingCount === 4 && closedRig.movingTriangles > 0 && closedRig.openness < 0.1);
     await screenshot('sfoils-closed');
     await page.keyboard.down('Space');
-    await page.evaluate(() => window.__gameDebug.step(1.3));
+    await page.evaluate(() => window.__gameDebug.step(0.5));
+    assert.equal(await page.evaluate(() => window.__gameDebug.inspect().projectileDetails.some(projectile => projectile.owner === 'player')), false);
+    assert.equal(await page.locator('#weapon-lock').innerText(), 'S-FOILS ЗАКРЫТЫ');
+    await page.keyboard.down('Shift');
+    await page.keyboard.press('x');
+    await page.evaluate(() => window.__gameDebug.step(3));
     await page.keyboard.up('Space');
-    assert.ok(await page.evaluate(() => window.__gameDebug.inspect().sfoilsRig.openness) > 0.8);
+    await page.keyboard.up('Shift');
+    assert.equal(await page.evaluate(() => window.__gameDebug.inspect().sfoilsRig.openness), 1);
     assert.ok(await page.evaluate(() => window.__gameDebug.inspect().projectileDetails.some(projectile => projectile.owner === 'player')));
     await screenshot('sfoils-open');
     await page.evaluate(() => window.__gameDebug.game.restart());

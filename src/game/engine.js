@@ -112,7 +112,6 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   let powerMode = 'balanced';
   let sfoilsMode = 'auto';
   let sfoilsOpenness = 1;
-  let fireOpensUntil = 0;
   let escortWaveTimer = 0;
   const escortAnchor = new THREE.Vector3(0, 90, 700);
   const escortWaypoints = [0, -650, -1300];
@@ -534,9 +533,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   function updateSfoils(dt) {
     if (selectedShipId !== 'xwing') { sfoilsOpenness = 1; return; }
     const forcedOpen = ['qte', 'cinematic', 'victory'].includes(mode);
-    const wantsFire = mode === 'playing' && !repairSystem.getSnapshot().active && (keys.has('Space') || mouseFiring || totalElapsed < fireOpensUntil);
-    const boosting = keys.has('ShiftLeft') || keys.has('ShiftRight');
-    const target = forcedOpen || wantsFire || sfoilsMode === 'open' ? 1 : sfoilsMode === 'closed' || mode === 'menu' || boosting ? 0 : 1;
+    const target = forcedOpen || sfoilsMode === 'open' || (sfoilsMode === 'auto' && mode !== 'menu') ? 1 : 0;
     sfoilsOpenness = THREE.MathUtils.damp(sfoilsOpenness, target, 2.5, dt);
     if (Math.abs(sfoilsOpenness - target) < 0.002) sfoilsOpenness = target;
     shipMesh.userData.setSfoils?.(sfoilsOpenness);
@@ -559,10 +556,8 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   function firePlayer() {
     const weapon = armament.current();
     if (mode !== 'playing' || repairSystem.getSnapshot().active || projectiles.length >= 128 || (weapon.heat > 0 && heat >= 0.97)) return;
-    fireOpensUntil = totalElapsed + 1.5;
     if (selectedShipId === 'xwing') {
-      if (sfoilsMode === 'closed') sfoilsMode = 'open';
-      if (sfoilsOpenness < 0.8) return;
+      if (sfoilsMode === 'closed' || sfoilsOpenness < 1) return;
     }
     if (!armament.consumeShot()) return;
     const forward = FORWARD.clone().applyQuaternion(player.quaternion);
@@ -919,7 +914,6 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     supportSystem.reset();
     sfoilsMode = 'auto';
     sfoilsOpenness = 1;
-    fireOpensUntil = 0;
     shipMesh.userData.setSfoils?.(1);
     heat = 0;
     abilityCooldown = 0;
@@ -992,7 +986,6 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   function toggleSfoils() {
     if (selectedShipId !== 'xwing' || !['menu', 'playing'].includes(mode)) return false;
     sfoilsMode = sfoilsMode === 'auto' ? sfoilsOpenness > 0.5 ? 'closed' : 'open' : sfoilsMode === 'open' ? 'closed' : 'open';
-    if (sfoilsMode === 'closed') fireOpensUntil = 0;
     onEvent({ type: 'sfoils-change', sfoilsMode });
     emitSnapshot();
     return true;
