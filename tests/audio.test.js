@@ -119,7 +119,7 @@ test('sound effects have finite envelopes, bounded polyphony and dispose stops/d
     assert.ok(context.sources.length > before, 'A priority explosion must still sound when the budget is full');
     assert.ok(context.sources.some(source => source.stops.includes(undefined)), 'The oldest voice must be stopped for the priority effect');
     for (const source of context.sources.filter(source => typeof source.onended === 'function')) source.end();
-    for (const method of ['laser', 'enemyLaser', 'torpedo', 'ion', 'hit', 'explosion', 'cue', 'ability', 'tie']) audio[method]();
+    for (const method of ['laser', 'enemyLaser', 'torpedo', 'ion', 'hit', 'explosion', 'cue', 'ability', 'tie', 'superlaserCharge', 'superlaserFire', 'stationExplosion', 'klaxon', 'whoosh', 'torpedoImpact']) audio[method]();
     for (const source of context.sources.filter(source => typeof source.onended === 'function')) {
       assert.ok(source.stops.some(time => Number.isFinite(time) && time > context.currentTime));
     }
@@ -167,6 +167,145 @@ test('mission signals are distinct, rate limited and silent while paused or mute
     audio.setMuted(false);
     audio.laser();
     assert.ok(context.sources.length > count);
+  } finally { audio.dispose(); fixture.close(); }
+});
+
+test('superlaser, station and impact events sound once, respect pause and mute, then recover', async () => {
+  const fixture = audioFixture();
+  const audio = createAudio({ manifest: null });
+  try {
+    await audio.start();
+    const context = fixture.contexts[0];
+    const events = [
+      ['superlaserCharge', () => audio.superlaserCharge()],
+      ['superlaserFire', () => audio.superlaserFire()],
+      ['stationExplosion', () => audio.stationExplosion()],
+      ['klaxon', () => audio.klaxon()],
+      ['whoosh', () => audio.whoosh(120)],
+      ['torpedoImpact', () => audio.torpedoImpact()],
+    ];
+    for (const [name, action] of events) {
+      context.currentTime += 10;
+      const before = context.sources.length;
+      action();
+      const added = context.sources.slice(before);
+      assert.ok(added.length > 0, `${name} must synthesise audible sources on the first call`);
+      const count = context.sources.length;
+      action();
+      assert.equal(context.sources.length, count, `${name} must be rate limited on an immediate repeat`);
+      for (const source of added) source.end();
+    }
+    audio.setPaused(true);
+    for (const [name, action] of events) {
+      context.currentTime += 10;
+      const count = context.sources.length;
+      action();
+      assert.equal(context.sources.length, count, `${name} must stay silent while paused`);
+    }
+    audio.setPaused(false);
+    for (const [name, action] of events) {
+      context.currentTime += 10;
+      const count = context.sources.length;
+      action();
+      assert.ok(context.sources.length > count, `${name} must sound again after unpausing`);
+      for (const source of context.sources.slice(count)) source.end();
+    }
+    audio.setMuted(true);
+    for (const [name, action] of events) {
+      context.currentTime += 10;
+      const count = context.sources.length;
+      action();
+      assert.equal(context.sources.length, count, `${name} must stay silent while muted`);
+    }
+    audio.setMuted(false);
+    for (const [name, action] of events) {
+      context.currentTime += 10;
+      const count = context.sources.length;
+      action();
+      assert.ok(context.sources.length > count, `${name} must sound again after unmuting`);
+      for (const source of context.sources.slice(count)) source.end();
+    }
+  } finally { audio.dispose(); fixture.close(); }
+});
+
+test('priority detonations still sound when the ordinary polyphony budget is exhausted', async () => {
+  const fixture = audioFixture();
+  const audio = createAudio({ manifest: null });
+  try {
+    await audio.start();
+    const context = fixture.contexts[0];
+    for (let i = 0; i < 24; i++) {
+      context.currentTime += 10;
+      audio.laser();
+    }
+    const before = context.sources.length;
+    context.currentTime += 10;
+    audio.whoosh();
+    assert.equal(context.sources.length, before, 'A non-priority whoosh must not exceed the voice budget');
+    context.currentTime += 10;
+    audio.stationExplosion();
+    assert.ok(context.sources.length > before, 'The station explosion must evict an ordinary voice and still sound');
+    const afterExplosion = context.sources.length;
+    context.currentTime += 10;
+    audio.torpedoImpact();
+    assert.ok(context.sources.length > afterExplosion, 'The torpedo impact must still sound on a full mixer');
+    assert.ok(context.sources.some(source => source.stops.includes(undefined)), 'An evicted voice is stopped without a scheduled time');
+    audio.dispose(); audio.dispose();
+    assert.equal(context.state, 'closed');
+    assert.ok(context.sources.every(source => source.stops.length > 0));
+    assert.ok(context.nodes.every(node => node.disconnected));
+  } finally { audio.dispose(); fixture.close(); }
+});
+
+test('superlaser charge clamps its request to a finite one to eight second span', async () => {
+  const fixture = audioFixture();
+  const audio = createAudio({ manifest: null });
+  try {
+    await audio.start();
+    const context = fixture.contexts[0];
+    context.currentTime = 10;
+    const before = context.sources.length;
+    audio.superlaserCharge(0);
+    const short = context.sources.slice(before);
+    assert.ok(short.length > 0, 'A zero-length request must still produce the charging voice');
+    for (const source of short) {
+      assert.ok(source.stops.some(time => Number.isFinite(time) && time > context.currentTime), 'Every clamped charge source must have a finite closing stop');
+    }
+    const shortSpan = Math.max(...short.map(source => Math.max(...source.stops))) - context.currentTime;
+    assert.ok(shortSpan >= 1, `A zero-length request must clamp up to the one second floor, got ${shortSpan}`);
+    for (const source of short) source.end();
+    context.currentTime = 100;
+    const longStart = context.sources.length;
+    audio.superlaserCharge(100);
+    const long = context.sources.slice(longStart);
+    assert.ok(long.length > 0, 'An over-long request must still produce the charging voice');
+    const longSpan = Math.max(...long.map(source => Math.max(...source.stops))) - context.currentTime;
+    assert.ok(longSpan <= 8.02, `A charge must never exceed the eight second ceiling, got ${longSpan}`);
+  } finally { audio.dispose(); fixture.close(); }
+});
+
+test('victory mission cue is a distinct and longer phrase than the success sting', async () => {
+  const fixture = audioFixture();
+  const audio = createAudio({ manifest: null });
+  try {
+    await audio.start();
+    const context = fixture.contexts[0];
+    const cues = [];
+    for (const kind of ['success', 'victory']) {
+      context.currentTime += 10;
+      const at = context.currentTime;
+      const before = context.sources.length;
+      audio.missionCue(kind);
+      const added = context.sources.slice(before);
+      assert.ok(added.length > 0, `${kind} must synthesise a mission cue`);
+      cues.push({
+        signature: JSON.stringify(added.map(source => [source.type, source.frequency?.events, source.startTime])),
+        span: Math.max(...added.map(source => Math.max(...source.stops))) - at,
+      });
+      for (const source of added) source.end();
+    }
+    assert.notEqual(cues[0].signature, cues[1].signature, 'Victory must not reuse the success sting');
+    assert.ok(cues[1].span > cues[0].span, 'The victory fanfare must be longer than the success sting');
   } finally { audio.dispose(); fixture.close(); }
 });
 

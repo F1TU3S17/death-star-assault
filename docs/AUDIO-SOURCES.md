@@ -59,3 +59,9 @@ The table above describes the source palette. The actual runtime mapping is list
 | `lock-locked`, `cue` | `rubberduck/terminal_01.ogg` | 0.30 / 0.28 |
 
 All bundled recordings are short (0.239–5 seconds). They replace, rather than double, the corresponding synthetic effect after successful Web Audio decoding. Until decoding completes or if it fails, the synthetic version remains available. These samples do not contain the film's actors, music, R2-D2 voice, or authentic Lucasfilm blaster recordings.
+
+## New atmospheric effects: original synthesis only
+
+Six atmospheric events and one outcome phrase were added to the runtime in `src/game/audio.js`: the Death Star superlaser charge (`superlaserCharge`) and discharge (`superlaserFire`), station destruction (`stationExplosion`), the battle-stations `klaxon`, the trench-wall or hull `whoosh`, the `torpedoImpact` of a proton torpedo, and the five-note `missionCue('victory')` fanfare. They are original Web Audio API synthesis written for this game.
+
+No audio files were downloaded, staged or bundled for them. `public/audio/manifest.json` and `public/audio/sources.json` are unchanged, no new attribution or license applies, and the download table and SHA-256 digests above still describe the complete bundled audio set. As with the existing synthesis, none of these effects include or imitate Star Wars film recordings, John Williams music, actor voices or R2-D2 sounds; they are generic space-opera synthesis and remain silent-safe, since the game keeps working when Web Audio is unavailable.

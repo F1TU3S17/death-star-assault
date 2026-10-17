@@ -372,11 +372,98 @@ export function createAudio({ manifest = 'audio/manifest.json' } = {}) {
     if (!ready(`mission-${kind}`, 1.5) || sample(`mission-${kind}`, true)) return;
     const v = voice(true);
     // Newly composed short interval patterns, without a film theme quotation.
-    const notes = kind === 'success' ? [392, 523.25, 659.25, 783.99] : kind === 'fail' ? [293.66, 277.18, 220, 146.83] : [523.25, 698.46];
+    const notes = kind === 'success' ? [392, 523.25, 659.25, 783.99]
+      : kind === 'fail' ? [293.66, 277.18, 220, 146.83]
+        : kind === 'victory' ? [261.63, 392, 523.25, 659.25, 783.99]
+          : [523.25, 698.46];
+    // The final fanfare answers the mission-complete sting instead of doubling it.
+    const lead = kind === 'victory' ? 0.75 : 0;
+    const step = kind === 'victory' ? 0.34 : 0.19;
+    const hold = kind === 'victory' ? 0.72 : 0.3;
     notes.forEach((frequency, i) => {
-      tone(v, frequency, frequency, 0.3, 'triangle', 0.12, i * 0.19);
-      tone(v, frequency / 2, frequency / 2, 0.34, 'sine', 0.1, i * 0.19);
+      tone(v, frequency, frequency, hold, 'triangle', 0.12, lead + i * step);
+      tone(v, frequency / 2, frequency / 2, hold + 0.04, 'sine', 0.1, lead + i * step);
     });
+    if (kind === 'victory') {
+      tone(v, 130.81, 130.81, 2.4, 'sine', 0.09, lead);
+      noise(v, 700, 3400, 1.8, 0.07, lead, 'bandpass', 1.2);
+    }
+  }
+  /** Death Star superlaser charging: a rising, accelerating charge that never quotes the film. */
+  function superlaserCharge(duration = 4.5) {
+    if (!ready('superlaser-charge', 1.5) || sample('superlaserCharge', true)) return;
+    const v = voice(true);
+    if (!v) return;
+    const span = clamp(duration, 1, 8);
+    tone(v, 38, 210, span, 'sawtooth', 0.22);
+    tone(v, 57, 316, span, 'triangle', 0.16);
+    tone(v, 900, 3900, span, 'sine', 0.055);
+    noise(v, 180, 1700, span, 0.15, 0, 'bandpass', 2.6);
+    noise(v, 60, 300, span, 0.2, 0, 'lowpass');
+    for (let i = 0; i < 8; i++) {
+      const at = span * Math.pow(i / 8, 1.7);
+      tone(v, 300 + i * 54, 250 + i * 40, 0.08, 'square', 0.04 + i * 0.006, at);
+    }
+  }
+  /** Superlaser discharge: one colossal slam, a horn-like scream and a rolling tail. */
+  function superlaserFire() {
+    if (!ready('superlaser-fire', 2.5) || sample('superlaserFire', true)) return;
+    const v = voice(true);
+    if (!v) return;
+    tone(v, 260, 17, 3, 'sine', 0.9);
+    tone(v, 430, 30, 1.5, 'sawtooth', 0.32);
+    tone(v, 980, 140, 1.25, 'sawtooth', 0.22, 0.04);
+    noise(v, 7200, 70, 2.8, 0.95, 0, 'lowpass');
+    noise(v, 2600, 150, 1.4, 0.45, 0.05, 'bandpass', 0.8);
+    noise(v, 320, 90, 2.2, 0.32, 0.55, 'bandpass', 1.1);
+  }
+  /** Station destruction: the core detonates, then the hull breaks up in spreading secondary blasts. */
+  function stationExplosion() {
+    if (!ready('station-explosion', 4) || sample('stationExplosion', true)) return;
+    const v = voice(true);
+    if (!v) return;
+    tone(v, 58, 15, 5.6, 'sine', 0.9);
+    tone(v, 31, 19, 5.4, 'sine', 0.5);
+    noise(v, 9000, 80, 4.8, 0.85, 0, 'lowpass');
+    noise(v, 420, 45, 5.4, 0.4, 0.9, 'lowpass');
+    const chain = [0, 0.22, 0.5, 0.86, 1.3, 1.85, 2.5, 3.3, 4.2];
+    chain.forEach((at, i) => {
+      const falloff = 1 - i / 11;
+      noise(v, 3400 - i * 170, 90, 0.9 + i * 0.14, 0.5 * falloff, at, 'lowpass');
+      tone(v, 124 - i * 6, 24, 0.8, 'triangle', 0.32 * falloff, at);
+    });
+  }
+  /** Battle-stations alarm: three two-tone sweeps, rate limited for mission phase changes. */
+  function klaxon() {
+    if (!ready('klaxon', 3) || sample('klaxon', true)) return;
+    const v = voice(true);
+    if (!v) return;
+    for (let i = 0; i < 3; i++) {
+      tone(v, 760, 505, 0.34, 'square', 0.085, i * 0.74);
+      tone(v, 380, 262, 0.36, 'sawtooth', 0.1, i * 0.74);
+      tone(v, 505, 1620, 0.28, 'sine', 0.055, i * 0.74 + 0.36);
+    }
+  }
+  /** Rushing pass-by for scraping a trench wall or flying close to a hull. */
+  function whoosh(distance = 260) {
+    if (!ready('whoosh', 2.5) || sample('whoosh')) return;
+    const v = voice();
+    if (!v) return;
+    const proximity = 1 / (1 + clamp(distance, 0, 1600) / 300);
+    noise(v, 220, 2700, 0.55, 0.5 * proximity, 0, 'bandpass', 1.1);
+    noise(v, 900, 170, 0.7, 0.3 * proximity, 0.06, 'lowpass');
+    tone(v, 110, 300, 0.45, 'sine', 0.1 * proximity, 0.02);
+  }
+  /** Magazine detonation: a sharp crack with a metallic ring, distinct from a plain hull hit. */
+  function torpedoImpact() {
+    if (!ready('torpedo-impact', 2) || sample('torpedoImpact', true)) return;
+    const v = voice(true);
+    if (!v) return;
+    noise(v, 5400, 120, 0.95, 0.8, 0, 'lowpass');
+    tone(v, 190, 36, 0.75, 'sine', 0.5);
+    tone(v, 1450, 250, 0.5, 'sawtooth', 0.16, 0.02);
+    tone(v, 2180, 1860, 0.44, 'triangle', 0.07, 0.05);
+    noise(v, 1900, 420, 0.6, 0.24, 0.08, 'bandpass', 3);
   }
   function setPaused(value) {
     paused = Boolean(value);
@@ -410,6 +497,7 @@ export function createAudio({ manifest = 'audio/manifest.json' } = {}) {
   return {
     start, laser, enemyLaser, torpedo, ion, hit, explosion, cue, ability, tie, setFlight, setMuted, dispose,
     astromech, radio, lock, incoming, turbolaser, vent, missionCue, setPaused, loadManifest,
+    superlaserCharge, superlaserFire, stationExplosion, klaxon, whoosh, torpedoImpact,
     getSampleStatus: () => ({ state: sampleState, events: [...samples.keys()] }),
     engine: setFlight,
     updateEngine: (speed, maxSpeed = 1, active = true) => setFlight({ speed: speed / Math.max(1, maxSpeed), active, boost: speed > maxSpeed * 1.12 }),

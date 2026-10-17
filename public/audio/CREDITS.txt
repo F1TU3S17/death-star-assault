@@ -1,5 +1,7 @@
 Bundled original science-fiction sound effects; no film recordings.
 
+Some runtime events (superlaser charge and discharge, station destruction, klaxon, trench-wall whoosh, torpedo impact, victory fanfare) are original Web Audio API synthesis created for this game. They add no files, no downloads and no licenses; the file lists, attributions and digests below are unchanged.
+
 Kenney — Sci-Fi Sounds (1.0), 2020, CC0 1.0
 Source: https://kenney.nl/assets/sci-fi-sounds
 Archive mirror: https://opengameart.org/content/sci-fi-sounds
