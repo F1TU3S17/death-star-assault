@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createCampaign } from './campaign.js';
+import { createCampaign, resolveProgressRule } from './campaign.js';
 import { createMissionDirector } from './mission-events.js';
 import { createEscortTactics } from './escort-tactics.js';
 import { createEnemySquadron } from './enemy-squadron.js';
@@ -9,16 +9,22 @@ import { createMissionProp } from './mission-props.js';
 import { createEnemyBrain, updateEnemyBrain } from './enemy-ai.js';
 import { getEnemyWeaponProfile, solveFireSolution, createTurretBrain } from './enemy-fire-control.js';
 import { getEnemyUnitSpec, chooseEnemyTarget } from './enemy-units.js';
-import { SHIPS } from './data.js';
-import { createWorld, createShip, createTurret, createCockpit } from './world.js';
+import { createAtAtUnit } from './at-at.js';
+import { SHIPS, EPISODES } from './data.js';
+import { createWorld, createShip, createTurret, createAtSt, createCockpit } from './world.js';
 import { createAudio } from './audio.js';
 import { createRenderPipeline } from './render-pipeline.js';
 import { createSceneLighting } from './scene-lighting.js';
 import { createTargetLock, stationLineOfSight, getLeadSolution } from './targeting.js';
 import { createFlightState, resetFlightState, stepFlight, getFlightTurnAuthority } from './flight-model.js';
-import { absorbDamage, segmentSphereHit, clampFrameDelta, createArmament, insideLockCone, steerDirection, splashDamage, getPowerProfile, createRepairSystem, createSupportSystem } from './simulation.js';
+import { absorbDamage, segmentSphereHit, clampFrameDelta, createArmament, insideLockCone, steerDirection, splashDamage, getPowerProfile, createRepairSystem, createSupportSystem, lethalImpact } from './simulation.js';
 
 const FORWARD = new THREE.Vector3(0, 0, -1);
+// Squadron radio is attributed to the leader who commands the phase in progress.
+const SQUADRON_SPEAKERS = {
+  combat: 'Красный Лидер', surface: 'Золотой Лидер', escort: 'Золотой Два',
+  assault: 'Красный Лидер', defend: 'Управление Явина', trench: 'Управление Явина', qte: 'Управление Явина',
+};
 const UP = new THREE.Vector3(0, 1, 0);
 const AXIS_X = new THREE.Vector3(1, 0, 0);
 const AXIS_Z = new THREE.Vector3(0, 0, 1);
@@ -28,12 +34,47 @@ const DEFAULT_MODELS = {
   tie: '/models/tie-fighter-detailed/scene.gltf',
 };
 
-function createPulseMaterial(color, ion = false, opacity = 0.95) {
+function createBoltMaterial(color, { ion = false, beamWidth = 2, beamLength = 22, intensity = 1 } = {}) {
   return new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
-    uniforms: { time: { value: 0 }, tint: { value: new THREE.Color(color) }, ion: { value: ion ? 1 : 0 }, alpha: { value: opacity } },
-    vertexShader: `varying vec2 vUv; varying vec3 vNormal; void main(){vUv=uv; vNormal=normalize(normalMatrix*normal); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader: `uniform float time; uniform vec3 tint; uniform float ion; uniform float alpha; varying vec2 vUv; varying vec3 vNormal; void main(){float facing=abs(normalize(vNormal).z); float core=pow(facing,5.0); float pulse=0.87+0.13*sin(vUv.y*(10.0+ion*40.0)-time*(65.0+ion*20.0)); vec3 color=mix(tint*1.6,vec3(2.0),core*0.82); gl_FragColor=vec4(color,alpha*pulse*(0.3+facing*0.7));}`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, side: THREE.DoubleSide,
+    uniforms: { time: { value: 0 }, tint: { value: new THREE.Color(color) }, ion: { value: ion ? 1 : 0 }, beamWidth: { value: beamWidth }, beamLength: { value: beamLength }, intensity: { value: intensity } },
+    vertexShader: `uniform float beamWidth; uniform float beamLength; varying vec2 vUv;
+      void main(){ vUv=uv;
+        vec4 center=modelViewMatrix*vec4(0.0,0.0,0.0,1.0);
+        vec3 axis=(modelViewMatrix*vec4(0.0,0.0,1.0,0.0)).xyz;
+        float axisLength=length(axis);
+        axis=axisLength>1e-5?axis/axisLength:vec3(0.0,0.0,1.0);
+        vec4 centerClip=projectionMatrix*center;
+        vec4 tailClip=projectionMatrix*(center+vec4(axis,0.0)*beamLength);
+        vec2 ndc=centerClip.xy/centerClip.w;
+        vec2 delta=tailClip.xy/tailClip.w-ndc;
+        float projected=length(delta);
+        vec2 dir=projected>1e-6?delta/projected:vec2(0.0,1.0);
+        // A perspective-correct streak that never falls below a readable size.
+        float lengthNdc=max(projected,0.07);
+        float widthNdc=max(projected*(beamWidth/max(1e-4,beamLength)),0.0075);
+        float taper=mix(1.0,0.5,uv.y);
+        vec2 along=dir*(lengthNdc*0.5);
+        vec2 across=vec2(-dir.y,dir.x)*(widthNdc*0.5)*taper;
+        vec2 finalNdc=ndc+along*(position.y*2.0)+across*(position.x*2.0);
+        gl_Position=vec4(finalNdc,centerClip.z/centerClip.w,1.0); }`,
+    fragmentShader: `uniform float time; uniform vec3 tint; uniform float ion; uniform float intensity; varying vec2 vUv;
+      void main(){
+        float across=abs(vUv.x-0.5)*2.0;
+        float along=vUv.y;
+        float glow=pow(max(0.0,1.0-across),2.6);
+        float core=pow(max(0.0,1.0-across*2.2),8.0);
+        float pulse=0.78+0.22*sin(along*30.0-time*62.0);
+        float head=1.0-smoothstep(0.0,0.38,along);
+        float tail=1.0-smoothstep(0.68,1.0,along);
+        vec3 color=mix(tint*1.25,vec3(2.4),core);
+        float alpha=(glow*0.42+core)*pulse*tail*(0.6+head*0.8)*intensity;
+        if(ion>0.5){
+          float spiral=0.5+0.5*sin(across*7.0+along*20.0-time*26.0);
+          color=mix(tint*1.5,vec3(1.9,2.2,3.0),core)*(0.9+0.3*spiral);
+          alpha*=0.85+0.3*spiral;
+        }
+        gl_FragColor=vec4(color*intensity,alpha); }`,
   });
 }
 
@@ -101,8 +142,8 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     else if (event.type === 'enemy-attack' && event.targetId === 'player') audio.incoming?.();
     publishEvent(event);
   };
-  const campaign = createCampaign('episode4');
-  const missionDirector = createMissionDirector();
+  let campaign = createCampaign('episode4');
+  let missionDirector = createMissionDirector();
   const escortTactics = createEscortTactics();
   const squadron = createEnemySquadron();
   const shipSystems = createShipSystems();
@@ -126,16 +167,17 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   const supportSystem = createSupportSystem();
   const projectiles = [];
   const effects = [];
+  const flashes = [];
   const listeners = [];
   const temporary = new THREE.Vector3();
   const temporary2 = new THREE.Vector3();
   const rotation = new THREE.Quaternion();
-  const boltGeometry = new THREE.CylinderGeometry(0.15, 0.15, 13, 5);
-  boltGeometry.rotateX(Math.PI / 2);
-  const playerBoltMaterial = createPulseMaterial(0xff303e);
-  const enemyBoltMaterial = createPulseMaterial(0x59ff77);
-  const ionBoltMaterial = createPulseMaterial(0x43afff, true);
-  const boltHalos = [createPulseMaterial(0xff303e, false, 0.16), createPulseMaterial(0x59ff77, false, 0.16), createPulseMaterial(0x43afff, true, 0.2)];
+  // A unit quad is stretched by the bolt shader into a camera-facing beam.
+  const boltGeometry = new THREE.PlaneGeometry(1, 1);
+  const playerBoltMaterial = createBoltMaterial(0xff303e, { beamWidth: 2, beamLength: 24, intensity: 1.2 });
+  const enemyBoltMaterial = createBoltMaterial(0x59ff77, { beamWidth: 2, beamLength: 24, intensity: 1.05 });
+  const ionBoltMaterial = createBoltMaterial(0x43afff, { ion: true, beamWidth: 2.8, beamLength: 28, intensity: 1.1 });
+  const shellBoltMaterial = createBoltMaterial(0xff9a4a, { beamWidth: 3.4, beamLength: 12, intensity: 1.35 });
   const torpedoGeometry = new THREE.CapsuleGeometry(0.45, 2, 3, 8);
   torpedoGeometry.rotateX(Math.PI / 2);
   const torpedoMaterial = new THREE.MeshStandardMaterial({ color: 0xc0d6e3, emissive: 0x558bb2, emissiveIntensity: 1.8, roughness: 0.4, metalness: 0.65 });
@@ -145,6 +187,14 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   const effectGeometry = new THREE.BoxGeometry(0.45, 0.24, 0.8);
   const effectTexture = createBurstTexture();
   const effectMaterials = [0xffb96a, 0xff5d28, 0xffe6c2, 0x82d2ff].map(color => new THREE.SpriteMaterial({ map: effectTexture, color: new THREE.Color(color).multiplyScalar(2.4), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false }));
+  // A glowing head keeps a shot readable even when it flies straight away from the camera.
+  const boltHeadMaterials = [0xff5a4a, 0x74ff8c, 0x7cc8ff].map(color => new THREE.SpriteMaterial({ map: effectTexture, color: new THREE.Color(color).multiplyScalar(2.4), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false }));
+  const flashMaterials = {
+    laser: new THREE.SpriteMaterial({ map: effectTexture, color: new THREE.Color(0xffd9b4).multiplyScalar(2.8), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false }),
+    ion: new THREE.SpriteMaterial({ map: effectTexture, color: new THREE.Color(0xa8dcff).multiplyScalar(2.6), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false }),
+    enemy: new THREE.SpriteMaterial({ map: effectTexture, color: new THREE.Color(0xb6ffbe).multiplyScalar(2.2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false }),
+    torpedo: new THREE.SpriteMaterial({ map: effectTexture, color: new THREE.Color(0xcdefff).multiplyScalar(2.8), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false }),
+  };
   const debrisMaterial = new THREE.MeshStandardMaterial({ color: 0x34363b, roughness: 0.58, metalness: 0.6, transparent: true });
 
   let disposed = false;
@@ -170,6 +220,8 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   let abilityCooldown = 0;
   let abilityRemaining = 0;
   let kills = 0;
+  let shotsFired = 0;
+  let shotsHit = 0;
   let lastDamage = -10;
   let lastPhase = 'menu';
   let lastRadio = '';
@@ -186,6 +238,13 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   let tieSoundTimer = 0;
   let relaysDestroyed = 0;
   let relayBonus = false;
+  let atAt = null;
+  let atAtState = null;
+  // The walker is scaled up so it reads as a walking fortress next to the fighters.
+  const AT_AT_SCALE = 1.9;
+  const AT_AT_RADIUS = { leg: 6, turret: 10.5, body: 26 };
+  // The Rebel base stands on the ice plain ahead of the arrival vector.
+  const hothBase = new THREE.Vector3(0, 0, -1500);
   let powerMode = 'balanced';
   let sfoilsMode = 'auto';
   let sfoilsOpenness = 1;
@@ -257,11 +316,18 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     escortChoicePending = false;
     for (const prop of missionProps) { scene.remove(prop.mesh); prop.dispose(); }
     missionProps.length = 0;
-    for (const enemy of enemies) removeEntity(enemy);
+    if (atAt) {
+      atAtState = { health: atAt.health, maxHealth: atAt.maxHealth };
+      atAt.mesh.visible = false;
+      atAt = null;
+    }
+    for (const entity of enemies) removeEntity(entity);
     for (const ally of allies) removeEntity(ally);
     for (const wingman of supportWingmen) removeEntity(wingman);
     for (const projectile of projectiles) scene.remove(projectile.mesh);
     for (const effect of effects) { scene.remove(effect.mesh); effect.mesh.material.dispose(); }
+    for (const flash of flashes) { scene.remove(flash.sprite); flash.material.dispose(); }
+    flashes.length = 0;
     enemies.length = 0;
     allies.length = 0;
     supportWingmen.length = 0;
@@ -414,6 +480,132 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     return ally;
   }
 
+  /** The walker is its own kind of enemy: armour, legs, a turret and a tow cable. */
+  function spawnAtAt(position, variant = 'assault') {
+    const mesh = world.hoth?.atAt?.group;
+    if (!mesh) return null;
+    mesh.visible = true;
+    mesh.position.copy(position);
+    mesh.quaternion.identity();
+    mesh.scale.setScalar(AT_AT_SCALE);
+    const unit = createAtAtUnit({ variant, seed: 11, stats: { position: { x: position.x, y: position.y, z: position.z } } });
+    const snapshot = unit.getSnapshot();
+    atAt = { mesh, unit, variant, health: snapshot.health, maxHealth: snapshot.maxHealth, part: 'armor', blocked: false, cableAttached: false, shellCooldown: 0, impactDone: false };
+    if (atAtState) {
+      atAt.health = atAtState.health;
+      atAt.maxHealth = atAtState.maxHealth;
+      atAtState = null;
+    }
+    return atAt;
+  }
+
+  /** Distance from a point to a segment: a swept bolt cannot slip past a joint. */
+  function distanceToSegment(from, to, point) {
+    const segment = to.clone().sub(from);
+    const lengthSquared = segment.lengthSq();
+    if (lengthSquared < 1e-8) return point.distanceTo(from);
+    const t = Math.min(1, Math.max(0, point.clone().sub(from).dot(segment) / lengthSquared));
+    return point.distanceTo(from.clone().addScaledVector(segment, t));
+  }
+
+  /** Which part of the walker a shot touches: frontal armour deflects, legs and turret do not. */
+  function atAtHitPart(from, to) {
+    if (!atAt || !atAt.mesh.visible) return null;
+    const center = atAt.mesh.position;
+    const forward = FORWARD.clone().applyQuaternion(atAt.mesh.quaternion);
+    const hit = to.clone().sub(center);
+    const distance = hit.length();
+    if (distance > 60) return null;
+    // The plate is frontal: it depends on where the shot came from, not where it landed.
+    const along = from.clone().sub(center).normalize().dot(forward);
+    const legs = atAt.mesh.userData.legs || [];
+    for (const leg of legs) {
+      // A leg is three vulnerable joints: the hip, the knee and the foot on the snow.
+      for (const node of [leg.hip, leg.knee, leg.foot]) {
+        if (!node) continue;
+        const world = node.getWorldPosition(new THREE.Vector3());
+        if (distanceToSegment(from, to, world) < AT_AT_RADIUS.leg) return 'leg';
+      }
+    }
+    const head = atAt.mesh.userData.head;
+    if (head) {
+      const world = head.getWorldPosition(new THREE.Vector3());
+      if (distanceToSegment(from, to, world) < AT_AT_RADIUS.turret) return 'turret';
+    }
+    if (distance < AT_AT_RADIUS.body) return along > 0.25 ? 'armor' : 'rear';
+    return null;
+  }
+
+  function updateAtAt(dt) {
+    if (!atAt) return;
+    const unit = atAt.unit;
+    const decision = unit.update(dt, { playerPosition: player.position, basePosition: hothBase, targetId: 'player', position: atAt.mesh.position });
+    const snapshot = unit.getSnapshot();
+    atAt.health = snapshot.health;
+    atAt.part = snapshot.part || atAt.part;
+    atAt.cableAttached = Boolean(unit.isCabled);
+    if (decision.move) {
+      atAt.mesh.position.x += decision.move.x * dt;
+      atAt.mesh.position.z += decision.move.z * dt;
+    }
+    if (decision.move && (decision.move.x || decision.move.z)) {
+      const heading = new THREE.Vector3(decision.move.x, 0, decision.move.z).normalize();
+      atAt.mesh.quaternion.setFromUnitVectors(FORWARD, heading);
+    }
+    animateAtAtLegs(snapshot);
+    if (atAt.unit.isCabled) {
+      const collapse = atAt.unit.collapse(dt);
+      const fall = Math.min(1, collapse.progress);
+      atAt.mesh.rotation.z = fall * 1.25;
+      atAt.mesh.rotation.x = fall * 0.22;
+      atAt.mesh.position.y = -fall * fall * 4;
+      if (collapse.impact && !atAt.impactDone) {
+        atAt.impactDone = true;
+        burst(atAt.mesh.position, 0, 7);
+        audio.explosion();
+        audio.stationExplosion?.();
+      }
+      return;
+    }
+    if (decision.fire) {
+      const origin = atAt.mesh.position.clone().addScaledVector(FORWARD.clone().applyQuaternion(atAt.mesh.quaternion), 9);
+      origin.y += 8;
+      const direction = new THREE.Vector3(decision.aim.x, decision.aim.y, decision.aim.z).normalize();
+      fireBolt(origin, direction, 'enemy', decision.fire.damage || 22, decision.fire.speed || 220, { type: 'shell', life: 4.5 });
+      audio.turbolaser?.();
+    }
+  }
+
+  /** Procedural walk cycle: four legs, diagonal synchronisation, body sway. */
+  function animateAtAtLegs(snapshot) {
+    const legs = atAt?.mesh?.userData?.legs || [];
+    const phase = Number.isFinite(snapshot?.stepPhase) ? snapshot.stepPhase : 0;
+    const offsets = [0, 0.5, 0.75, 0.25];
+    legs.forEach((leg, index) => {
+      const cycle = (phase + (offsets[index] ?? 0)) % 1;
+      const swing = Math.sin(cycle * Math.PI * 2);
+      const lift = Math.max(0, Math.cos(cycle * Math.PI * 2));
+      if (leg.hip) leg.hip.rotation.x = swing * 0.3;
+      if (leg.knee) leg.knee.rotation.x = -0.2 - lift * 0.55;
+      if (leg.foot) leg.foot.rotation.x = 0.25 + swing * 0.18;
+    });
+    if (atAt?.mesh?.userData?.body) {
+      atAt.mesh.userData.body.position.y = Math.sin(phase * Math.PI * 4) * 0.35;
+      atAt.mesh.userData.body.rotation.z = Math.sin(phase * Math.PI * 2) * 0.02;
+    }
+  }
+
+  /** A two-legged snow trooper walker: a squat body, a gun and two legs. */
+  function spawnAtSt(position) {
+    const mesh = createAtSt();
+    mesh.position.copy(position);
+    scene.add(mesh);
+    const entity = { id: `at-st-${++entitySerial}`, kind: 'at-st', variant: 'walker', mesh, health: 90, radius: 9, velocity: new THREE.Vector3(), fireTimer: 1.4 + Math.random() * 1.4, seed: Math.random() * 20, stun: 0 };
+    entity.brain = createTurretBrain('light', entity.fireTimer);
+    enemies.push(entity);
+    return entity;
+  }
+
   function setupPhase(phase) {
     const previous = lastPhase;
     lastPhase = phase;
@@ -497,6 +689,57 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       torpedoImpactPlayed = false;
       clearInput();
       exitPointerLock();
+    } else if (phase === 'hoth-arrival') {
+      player.position.set(0, 150, 950);
+      player.quaternion.identity();
+      for (let i = 0; i < 4; i++) spawnTie(new THREE.Vector3((i % 2 - 0.5) * 260, 130 + i * 25, 380 - i * 190));
+      shields = Math.max(shields, stats.shield * 0.9);
+    } else if (phase === 'hoth-assault') {
+      player.position.set(0, 80, 780);
+      player.quaternion.identity();
+      spawnAtSt(new THREE.Vector3(-120, 0, 120));
+      spawnAtSt(new THREE.Vector3(300, 0, -320));
+      spawnAtSt(new THREE.Vector3(160, 0, -180));
+      spawnAtSt(new THREE.Vector3(-40, 0, -520));
+      spawnAtSt(new THREE.Vector3(220, 0, -760));
+      spawnTurret(-260, -260);
+      spawnTurret(280, -980, 'heavy');
+      for (let i = 0; i < 2; i++) spawnTie(new THREE.Vector3((i - 0.5) * 320, 120, 200 - i * 320));
+    } else if (phase === 'hoth-atat') {
+      player.position.set(0, 34, 620);
+      player.quaternion.identity();
+      spawnAtAt(new THREE.Vector3(90, 0, 120));
+      shields = Math.max(shields, stats.shield * 0.85);
+    } else if (phase === 'hoth-tow') {
+      const forced = campaign.getSnapshot().mission.forceShipId;
+      if (forced && selectedShipId !== forced) replaceShip(forced);
+      if (!atAt) spawnAtAt(new THREE.Vector3(60, 0, 120));
+      player.position.set(0, 16, 420);
+      player.quaternion.identity();
+      speed = 0;
+      mode = 'qte';
+      lastQteStage = -1;
+      superlaserCharging = false;
+      clearInput();
+      exitPointerLock();
+    } else if (phase === 'hoth-fall') {
+      if (!atAt) spawnAtAt(new THREE.Vector3(60, 0, 60));
+      atAt?.unit.attachTowCable('leg');
+      mode = 'cinematic';
+      cockpit.visible = false;
+      player.visible = false;
+      explosionPlayed = false;
+      torpedoImpactPlayed = false;
+      clearInput();
+      exitPointerLock();
+    } else if (phase === 'hoth-evacuation') {
+      player.position.set(0, 120, 900);
+      player.quaternion.identity();
+      escortAnchor.set(0, 90, 520);
+      spawnAlly('gold-2', 'Золотой Два', 'ywing', new THREE.Vector3(-70, 95, 560));
+      spawnAlly('gold-3', 'Золотой Три', 'ywing', new THREE.Vector3(70, 95, 560));
+      for (let i = 0; i < 3; i++) spawnTie(new THREE.Vector3((i - 1) * 240, 140 + i * 20, 120 - i * 240));
+      shields = Math.max(shields, stats.shield * 0.8);
     } else if (phase === 'victory') {
       mode = 'victory';
       onEvent({ type: 'victory', elapsed: totalElapsed, kills });
@@ -506,7 +749,8 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     if (previous !== 'menu' && previous !== phase) {
       onEvent({ type: 'mission-complete', missionId: previous });
     }
-    if (phase !== 'qte' && phase !== 'cinematic' && phase !== 'victory') mode = 'playing';
+    // The Hoth tow run and the fall are scripted phases: they own the camera and the input.
+    if (!['qte', 'hoth-tow', 'cinematic', 'hoth-fall', 'victory'].includes(phase)) mode = 'playing';
     camera.position.copy(player.position).add(new THREE.Vector3(0, 9, 30));
     snapChaseCamera = true;
     emitSnapshot();
@@ -609,13 +853,16 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       heat: Math.round(heat * 100), abilityCooldown: Math.max(0, abilityCooldown), abilityActive: abilityRemaining > 0,
       weapon: { id: selectedWeapon.id, name: selectedWeapon.name, ammo: selectedWeapon.ammo, reserve: selectedWeapon.reserve, cooldown: Math.max(selectedWeapon.cooldown, weaponFaultDelay), reloading: selectedWeapon.reloading, reloadRemaining: selectedWeapon.reloadRemaining, reloadDuration: selectedWeapon.reloadDuration, locked, lockProgress: lock.progress, lockStatus: lock.status, lockDuration: lock.duration / shipSystems.snapshot().effects.sensorLockRate, lockTargetId: lockCandidate?.id || null, guidance: locked ? 'guided' : 'unguided' },
       weapons: availableWeapons,
-      kills, targetCount: enemies.filter(enemy => !enemy.disabled).length, elapsed: totalElapsed,
+      kills, targetCount: enemies.filter(enemy => !enemy.disabled).length, accuracy: { shots: shotsFired, hits: shotsHit }, elapsed: totalElapsed,
       mission: active ? { ...state.mission, progress: Math.round(state.progress / state.target * 100), count: state.progress, target: state.target } : null,
       qte: mode === 'qte' ? state.qte : null,
       targeting: visibleTarget && (lockCandidate || target?.dot > .3) ? { ...visibleTarget, id: displayedTarget.id, lockProgress: lockCandidate?.id === lock.targetId ? lock.progress : 0, locked } : null,
       lead,
       targets: enemies.filter(enemy => !enemy.disabled).map(projectTarget).filter(Boolean), objectiveMarker,
-      allies: allies.map(ally => ({ id: ally.id, name: ally.name, kind: ally.kind, health: Math.round(ally.health / ally.maxHealth * 100), shields: Math.round(ally.shields / ally.maxShields * 100), distance: Math.round(ally.mesh.position.distanceTo(player.position)), position: { x: ally.mesh.position.x, y: ally.mesh.position.y, z: ally.mesh.position.z } })),
+      allies: allies.map(ally => {
+        const relative = ally.mesh.position.clone().sub(player.position).applyQuaternion(player.quaternion.clone().invert());
+        return { id: ally.id, name: ally.name, kind: ally.kind, health: Math.round(ally.health / ally.maxHealth * 100), shields: Math.round(ally.shields / ally.maxShields * 100), distance: Math.round(ally.mesh.position.distanceTo(player.position)), position: { x: ally.mesh.position.x, y: ally.mesh.position.y, z: ally.mesh.position.z }, bearing: Math.atan2(relative.x, -relative.z) };
+      }),
       fleetHealth: allies.length ? Math.round(allies.reduce((total, ally) => total + ally.health / ally.maxHealth, 0) / allies.length * 100) : null,
       escortTactics: state.phase === 'escort' ? escortTactics.snapshot() : null,
       escortDistance: state.phase === 'escort' ? Math.max(0, escortAnchor.z - (escortWaypoints[state.progress] ?? escortAnchor.z)) : null,
@@ -637,6 +884,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
         return { bearing: Math.atan2(relative.x, -relative.z), distance: relative.length(), kind: enemy.kind, aiState: enemy.aiState || 'tracking', aiTarget: enemy.aiTarget || 'player', telegraph: Boolean(enemy.telegraph), evading: Boolean(enemy.evading) };
       }),
       radio: state.radio, reason: state.reason || '', muted: audio.muted,
+      atAt: atAt ? { health: atAt.health, maxHealth: atAt.maxHealth, part: atAt.part, blocked: atAt.blocked, cabled: atAt.cableAttached, phase: atAt.unit.getSnapshot().phase, position: { x: atAt.mesh.position.x, y: atAt.mesh.position.y, z: atAt.mesh.position.z } } : null,
       position: { x: player.position.x, y: player.position.y, z: player.position.z },
     };
   }
@@ -675,6 +923,32 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     }
   }
 
+  /** A short, bright flare where a weapon discharges. */
+  function muzzleFlash(position, kind = 'laser', size = 1) {
+    const base = flashMaterials[kind] || flashMaterials.laser;
+    const material = base.clone();
+    const sprite = new THREE.Sprite(material);
+    sprite.position.copy(position);
+    sprite.scale.setScalar(2 * size);
+    scene.add(sprite);
+    flashes.push({ sprite, material, life: 0.12, maxLife: 0.12, size });
+  }
+
+  function updateFlashes(dt) {
+    for (let i = flashes.length - 1; i >= 0; i--) {
+      const flash = flashes[i];
+      flash.life -= dt;
+      const ratio = Math.max(0, flash.life / flash.maxLife);
+      flash.sprite.scale.setScalar((1.6 + (1 - ratio) * 3.4) * flash.size);
+      flash.material.opacity = ratio * ratio;
+      if (flash.life <= 0) {
+        scene.remove(flash.sprite);
+        flash.material.dispose();
+        flashes.splice(i, 1);
+      }
+    }
+  }
+
   function damagePlayer(amount) {
     if (!['playing', 'qte'].includes(mode)) return;
     const shielded = shields > 0;
@@ -699,6 +973,18 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       syncCampaign();
       emitSnapshot();
     }
+  }
+
+  // A true crash kills the fighter outright regardless of remaining hull.
+  function crashPlayer(reason) {
+    if (!['playing', 'qte'].includes(mode)) return;
+    hull = 0;
+    shields = 0;
+    burst(player.position, 0, 3);
+    audio.crash?.();
+    campaign.fail(reason);
+    syncCampaign();
+    emitSnapshot();
   }
 
   function destroyEnemy(enemy) {
@@ -790,6 +1076,47 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     }
   }
 
+  /** The tow-cable run is a scripted low pass under the walker. */
+  const HOTH_TOW_PATH = [
+    { from: new THREE.Vector3(60, 46, 420), to: new THREE.Vector3(60, 6, 300) },
+    { from: new THREE.Vector3(60, 6, 300), to: new THREE.Vector3(60, 6, 40) },
+    { from: new THREE.Vector3(60, 6, 40), to: new THREE.Vector3(150, 30, 150) },
+    { from: new THREE.Vector3(150, 30, 150), to: new THREE.Vector3(220, 150, 320) },
+  ];
+
+  function updateHothTow(dt) {
+    const state = campaign.getSnapshot();
+    const qte = state.qte;
+    if (!qte) return;
+    const stage = Math.min(HOTH_TOW_PATH.length - 1, qte.stage);
+    const leg = HOTH_TOW_PATH[stage];
+    const duration = state.mission?.qte?.[stage]?.duration || 2;
+    const elapsed = duration - Math.max(0, qte.remaining);
+    const t = Math.min(1, Math.max(0, elapsed / Math.max(0.1, duration)));
+    player.position.lerpVectors(leg.from, leg.to, t);
+    const walker = atAt?.mesh?.position || new THREE.Vector3(60, 0, 120);
+    const heading = walker.clone().sub(player.position).normalize();
+    player.quaternion.setFromUnitVectors(FORWARD, heading);
+    speed = 120;
+  }
+
+  /** Rebel transports leave the pad one by one; the player shepherds them out. */
+  function updateHothEvacuation() {
+    const state = campaign.getSnapshot();
+    if (state.phase !== 'hoth-evacuation') return;
+    const transports = world.hoth?.transports || [];
+    const next = transports[state.progress];
+    if (next && next.state === 'parked') world.hoth.launchTransport(next.id);
+    const airborne = transports.filter(transport => transport.state !== 'parked');
+    const last = airborne[airborne.length - 1];
+    if (!last || state.progress >= state.target) return;
+    if (last.group.position.y > 90 && player.position.distanceTo(last.group.position) < 1200) {
+      campaign.recordEscortCheckpoint();
+      audio.cue();
+      onEvent({ type: 'radio', speaker: 'Штурман транспорта', text: `Транспорт ${state.progress + 1} ушёл с площадки. Держим курс на флот.` });
+    }
+  }
+
   function updateSupportWingmen(dt) {
     const retired = [];
     for (const wingman of supportWingmen) {
@@ -820,7 +1147,11 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
         const distance = target.mesh.position.distanceTo(wingman.mesh.position);
         const aim = target.mesh.position.clone().addScaledVector(target.velocity, distance / 720).sub(wingman.mesh.position).normalize();
         const right = new THREE.Vector3(1, 0, 0).applyQuaternion(wingman.mesh.quaternion);
-        for (const sign of [-1, 1]) fireBolt(wingman.mesh.position.clone().addScaledVector(right, sign * 3).addScaledVector(aim, 8), aim, 'friendly', 14, 720, { type: 'laser' });
+        for (const sign of [-1, 1]) {
+          const muzzle = wingman.mesh.position.clone().addScaledVector(right, sign * 3).addScaledVector(aim, 8);
+          fireBolt(muzzle, aim, 'friendly', 14, 720, { type: 'laser' });
+          muzzleFlash(muzzle, 'laser', 0.8);
+        }
         audio.laser();
         wingman.fireTimer = 0.6;
       }
@@ -843,10 +1174,11 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
 
   function fireBolt(position, direction, owner, damage, velocity = 670, options = {}) {
     if (projectiles.length > 130) return;
-    const mesh = new THREE.Mesh(boltGeometry, options.type === 'ion' ? ionBoltMaterial : owner !== 'enemy' ? playerBoltMaterial : enemyBoltMaterial);
-    const halo = new THREE.Mesh(boltGeometry, boltHalos[options.type === 'ion' ? 2 : owner !== 'enemy' ? 0 : 1]);
-    halo.scale.set(3.5, 3.5, 1);
-    mesh.add(halo);
+    const ion = options.type === 'ion';
+    const mesh = new THREE.Mesh(boltGeometry, options.type === 'shell' ? shellBoltMaterial : ion ? ionBoltMaterial : owner !== 'enemy' ? playerBoltMaterial : enemyBoltMaterial);
+    const head = new THREE.Sprite(options.type === 'shell' ? boltHeadMaterials[1] : ion ? boltHeadMaterials[2] : owner !== 'enemy' ? boltHeadMaterials[0] : boltHeadMaterials[1]);
+    head.scale.setScalar(options.type === 'shell' ? 2.6 : ion ? 1.9 : 1.5);
+    mesh.add(head);
     mesh.position.copy(position);
     mesh.quaternion.setFromUnitVectors(FORWARD, direction);
     scene.add(mesh);
@@ -878,12 +1210,16 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       mesh.quaternion.copy(player.quaternion);
       scene.add(mesh);
       projectiles.push({ mesh, owner: 'player', type: 'torpedo', damage: weapon.damage, velocity: forward.multiplyScalar(weapon.speed), life: 6.5, target: best, profile: weapon });
+      muzzleFlash(mesh.position, 'torpedo', 1.8);
+      shotsFired += 1;
       audio.torpedo?.();
     } else {
       const side = new THREE.Vector3(1, 0, 0).applyQuaternion(player.quaternion);
       for (const sign of [-1, 1]) {
         const origin = player.position.clone().addScaledVector(side, sign * 4).addScaledVector(forward, 7);
         fireBolt(origin, direction, 'player', (weapon.type === 'ion' ? weapon.damage * 0.5 : weapon.damage * 0.6) * getPowerProfile(powerMode).damage, weapon.speed, { type: weapon.type, stun: weapon.stun || 0 });
+        muzzleFlash(origin, weapon.type === 'ion' ? 'ion' : 'laser', weapon.type === 'ion' ? 1.3 : 1);
+        shotsFired += 1;
       }
       if (weapon.type === 'ion') audio.ion?.();
       else audio.laser();
@@ -923,7 +1259,14 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     if (phase === 'trench') {
       const inWall = Math.abs(player.position.x) > 66 && player.position.y < 75;
       const inFloor = player.position.y < -127;
-      if ((inWall || inFloor || player.position.y > 105) && collisionCooldown === 0) {
+      // Floor hits are instant wrecks; walls only at race pace. Everything
+      // below that threshold keeps the forgiving scrape behaviour.
+      const hardContact = inFloor || (inWall && lethalImpact({ speed, maxSpeed: stats.speed, kind: 'wall' }));
+      if (inFloor) {
+        crashPlayer('Удар о пол траншеи.');
+      } else if (inWall && hardContact && collisionCooldown === 0) {
+        crashPlayer('Влет в стену траншеи.');
+      } else if ((inWall || player.position.y > 105) && collisionCooldown === 0) {
         damagePlayer(24);
         collisionCooldown = 1.2;
         player.position.x = THREE.MathUtils.clamp(player.position.x, -50, 50);
@@ -950,13 +1293,19 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
         speed = flight.speed;
         damagePlayer(12);
       }
-    } else if (phase === 'surface' && player.position.y < -120 && collisionCooldown === 0) {
-      damagePlayer(28);
-      collisionCooldown = 1.5;
-      player.position.y = -65;
-      player.quaternion.slerp(new THREE.Quaternion(), 0.8);
-      resetFlightState(flight, FORWARD.clone().applyQuaternion(player.quaternion), speed * .6);
-      speed = flight.speed;
+    } else if (phase === 'surface' && player.position.y < -120) {
+      // Ploughing into the Death Star's hull at speed is fatal; a slow graze
+      // keeps its forgiving scrape.
+      if (lethalImpact({ speed, maxSpeed: stats.speed, kind: 'ground' })) {
+        crashPlayer('Врезался в поверхность Звезды Смерти.');
+      } else if (collisionCooldown === 0) {
+        damagePlayer(28);
+        collisionCooldown = 1.5;
+        player.position.y = -65;
+        player.quaternion.slerp(new THREE.Quaternion(), 0.8);
+        resetFlightState(flight, FORWARD.clone().applyQuaternion(player.quaternion), speed * .6);
+        speed = flight.speed;
+      }
     }
     // Long-distance free flight stays navigable: mission targets never disappear forever.
     if (phase === 'combat' && player.position.length() > 4500) {
@@ -986,7 +1335,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     const directives = new Map(formation.directives.map(item => [item.id, item]));
     for (const event of formation.events) {
       onEvent(event);
-      onEvent({ type: 'radio', speaker: ['defend', 'trench', 'qte'].includes(phase) ? 'Управление Явина' : 'Красный Лидер', text: event.text });
+      onEvent({ type: 'radio', speaker: SQUADRON_SPEAKERS[phase] || 'Управление Явина', text: event.text });
       if (event.code === 'reinforcement-request') {
         const reinforcement = spawnTie(player.position.clone().add(new THREE.Vector3(600, 120, -800)), 'ace');
         reinforcement.bonusOnly = true;
@@ -1084,7 +1433,9 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
           sampleX: Math.random() * 2 - 1, sampleY: Math.random() * 2 - 1 });
         if (solution.reachable) {
           direction.set(solution.direction.x, solution.direction.y, solution.direction.z);
-          fireBolt(new THREE.Vector3(solution.origin.x, solution.origin.y, solution.origin.z), direction, 'enemy', weaponProfile.damage, weaponProfile.speed, { life: weaponProfile.lifetime });
+          const muzzle = new THREE.Vector3(solution.origin.x, solution.origin.y, solution.origin.z);
+          fireBolt(muzzle, direction, 'enemy', weaponProfile.damage, weaponProfile.speed, { life: weaponProfile.lifetime });
+          muzzleFlash(muzzle, 'enemy', 0.9);
           enemy.lastShotAt = totalElapsed;
         }
         if (enemy.kind === 'turret' && enemy.variant === 'heavy') audio.turbolaser?.();
@@ -1143,8 +1494,32 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
           }
         }
       } else if (bolt.owner === 'player' || bolt.owner === 'friendly') {
+        const walkerPart = atAtHitPart(previous, bolt.mesh.position);
+        if (walkerPart) {
+          // The frontal plate deflects the shot outright; only open parts take damage.
+          const result = walkerPart === 'armor'
+            ? { applied: 0, blocked: true, part: walkerPart, health: atAt.health }
+            : atAt.unit.applyDamage(bolt.damage, { part: walkerPart });
+          atAt.health = result.health;
+          atAt.part = walkerPart;
+          atAt.blocked = Boolean(result.blocked);
+          bolt.life = 0;
+          if (result.blocked) {
+            burst(bolt.mesh.position, 3, 0.5);
+            audio.hit?.();
+          } else {
+            burst(bolt.mesh.position, 1, 0.7);
+            audio.hit?.();
+            if (atAt.health <= atAt.maxHealth * 0.35 && campaign.getSnapshot().phase === 'hoth-atat') {
+              atAtState = { health: atAt.health, maxHealth: atAt.maxHealth };
+              campaign.recordKill('at-at');
+            }
+          }
+          bolt.life = 0;
+        }
         for (const enemy of enemies) {
           if (enemy.health <= 0 || enemy.disabled || enemy.retreat || !segmentSphereHit(previous, bolt.mesh.position, enemy.mesh.position, enemy.radius)) continue;
+          if (bolt.owner === 'player') shotsHit += 1;
           if (bolt.type === 'torpedo') detonate(bolt, enemy);
           else {
             enemy.health -= bolt.damage;
@@ -1242,6 +1617,26 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       shipMesh.visible = true;
       return;
     }
+    if (mode === 'qte' && campaign.getSnapshot().phase === 'hoth-tow') {
+      const walker = atAt?.mesh?.position || new THREE.Vector3(60, 0, 120);
+      const forward = FORWARD.clone().applyQuaternion(player.quaternion);
+      camera.position.copy(player.position).addScaledVector(forward, -16).add(new THREE.Vector3(0, 4.5, 0));
+      camera.up.copy(UP);
+      camera.lookAt(walker.x, walker.y + 9, walker.z);
+      cockpit.visible = cameraMode === 'cockpit';
+      shipMesh.visible = cameraMode !== 'cockpit';
+      return;
+    }
+    if (mode === 'cinematic' && campaign.getSnapshot().phase === 'hoth-fall') {
+      const walker = atAt?.mesh?.position || new THREE.Vector3(60, 0, 0);
+      const offset = new THREE.Vector3(150, 70, 190);
+      camera.position.lerp(walker.clone().add(offset), 1 - Math.exp(-dt * 1.6));
+      camera.up.copy(UP);
+      camera.lookAt(walker.x, walker.y + 6, walker.z);
+      cockpit.visible = false;
+      shipMesh.visible = false;
+      return;
+    }
     if (mode === 'cinematic' || mode === 'victory') {
       const t = mode === 'victory' ? 12 : campaign.getSnapshot().elapsed;
       world.updateCinema(t, camera);
@@ -1293,8 +1688,8 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   function update(dt) {
     if (mode !== 'paused') {
       backdropElapsed += dt;
-      world.update(backdropElapsed);
-      for (const material of [playerBoltMaterial, enemyBoltMaterial, ionBoltMaterial, ...boltHalos]) material.uniforms.time.value = backdropElapsed;
+      world.update(backdropElapsed, dt);
+      for (const material of [playerBoltMaterial, enemyBoltMaterial, ionBoltMaterial]) material.uniforms.time.value = backdropElapsed;
       updateSfoils(dt);
     }
     if (mode === 'playing') {
@@ -1322,6 +1717,8 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       }
       updateFlight(dt);
       if (mode === 'playing') {
+        updateAtAt(dt);
+        updateHothEvacuation();
         updateMissionContent(dt);
         updateAllies(dt);
         updateSupportWingmen(dt);
@@ -1331,8 +1728,11 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
         updateRedLeaderDeparture(dt);
         campaign.update(dt);
         syncCampaign();
+      } else if (mode === 'cinematic' && campaign.getSnapshot().phase === 'hoth-fall') {
+        updateAtAt(dt);
       }
       updateEffects(dt);
+      updateFlashes(dt);
       tieSoundTimer = Math.max(0, tieSoundTimer - dt);
       if (tieSoundTimer === 0) {
         const nearestTie = enemies.filter(enemy => enemy.kind === 'tie').reduce((nearest, enemy) => Math.min(nearest, enemy.mesh.position.distanceTo(player.position)), Infinity);
@@ -1340,6 +1740,8 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       }
     } else if (mode === 'qte' || mode === 'cinematic') {
       totalElapsed += dt;
+      if (mode === 'qte' && campaign.getSnapshot().phase === 'hoth-tow') updateHothTow(dt);
+      if (mode === 'cinematic' && campaign.getSnapshot().phase === 'hoth-fall') updateAtAt(dt);
       handleMissionEvents(missionDirector.update({ dt }));
       campaign.update(dt);
       syncCampaign();
@@ -1409,6 +1811,8 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     player.visible = true;
     totalElapsed = 0;
     kills = 0;
+    shotsFired = 0;
+    shotsHit = 0;
     speed = 0;
     resetFlightState(flight);
     armament.reset();
@@ -1584,7 +1988,10 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
 
   const consumedKeys = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'KeyC', 'KeyF', 'KeyR', 'KeyV', 'KeyT', 'KeyB', 'KeyG', 'KeyX', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Escape']);
   addListener(window, 'keydown', event => {
-    if (/INPUT|TEXTAREA|SELECT/.test(event.target?.tagName)) return;
+    const targetTag = event.target?.tagName;
+    if (targetTag === 'INPUT' || targetTag === 'TEXTAREA') return;
+    // A focused dropdown would swallow the trigger: release it so the shot goes off.
+    if (targetTag === 'SELECT' && event.code === 'Space') event.target.blur?.();
     if (consumedKeys.has(event.code) && mode !== 'menu') event.preventDefault();
     if (event.code === 'Escape' && !event.repeat) { mode === 'paused' ? resume() : pause(); return; }
     if (!['playing', 'qte'].includes(mode)) return;
@@ -1640,6 +2047,14 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
 
   const api = {
     start, pause, resume, restart: () => start({ shipId: sortieShipId }), setCamera, setPowerMode, repair, selectRepair, setWingOrder, requestSupport, toggleSfoils, selectWeapon, cycleWeapon, reloadWeapon, useAbility, submitQte,
+    setEpisode(id) {
+      const episodeId = EPISODES[id] ? id : 'episode4';
+      if (campaign.getSnapshot().episodeId === episodeId) return episodeId;
+      campaign = createCampaign(episodeId);
+      missionDirector = createMissionDirector(EPISODES[episodeId].missions);
+      lastPhase = 'menu';
+      return episodeId;
+    },
     getSnapshot,
     setGraphicsQuality(value) {
       if (!['hd', 'performance'].includes(value)) return false;
@@ -1671,7 +2086,9 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       effectGeometry.dispose();
       effectTexture.dispose(); debrisMaterial.dispose();
       playerBoltMaterial.dispose(); enemyBoltMaterial.dispose(); ionBoltMaterial.dispose();
-      boltHalos.forEach(material => material.dispose());
+      boltHeadMaterials.forEach(material => material.dispose());
+      Object.values(flashMaterials).forEach(material => material.dispose());
+      for (const flash of flashes) flash.material.dispose();
       effectMaterials.forEach(material => material.dispose());
       sceneLighting.dispose(); renderPipeline.dispose(); renderer.dispose(); audio.dispose();
       if (window.__gameDebug?.game === api) delete window.__gameDebug;
@@ -1698,6 +2115,13 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       cameraPosition: camera.position.toArray(), cameraQuaternion: camera.quaternion.toArray(), cameraNear: camera.near,
       orbitalStationVisible: Boolean(world.space?.visible),
       projectileDetails: projectiles.map(projectile => ({ type: projectile.type || 'laser', owner: projectile.owner, damage: projectile.damage, locked: Boolean(projectile.target), position: projectile.mesh.position.toArray(), velocity: projectile.velocity.toArray() })),
+      walkerParts: atAt ? {
+        legs: (atAt.mesh.userData.legs || []).map(leg => {
+          const point = (leg.hip || leg.knee || leg.foot).getWorldPosition(new THREE.Vector3());
+          return { x: point.x, y: point.y, z: point.z };
+        }),
+        head: atAt.mesh.userData.head ? (() => { const point = atAt.mesh.userData.head.getWorldPosition(new THREE.Vector3()); return { x: point.x, y: point.y, z: point.z }; })() : null,
+      } : null,
       playerModel: shipMesh.userData.modelStatus, playerModelUrl: shipMesh.userData.modelUrl,
       camera: cameraMode, renderCalls: renderer.info.render.calls,
       renderStats: { ...renderer.info.render },
@@ -1706,21 +2130,24 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     }),
     advanceMission() {
       const state = campaign.getSnapshot();
-      if (state.phase === 'combat' || state.phase === 'surface' || state.phase === 'defend') {
+      const rule = state.mission?.progressRule || resolveProgressRule(state.mission);
+      if (rule?.rule === 'kills') {
         const needed = state.target - state.progress;
-        for (let i = 0; i < needed; i++) campaign.recordKill(state.phase === 'surface' ? 'turret' : 'tie');
-      } else if (state.phase === 'assault') {
-        for (let i = state.assault.kills; i < state.assault.targetKills; i++) campaign.recordKill('tie');
-        if (campaign.getSnapshot().phase === 'assault') campaign.recordCheckpoint();
-      } else if (state.phase === 'escort') {
+        for (let i = 0; i < needed; i++) campaign.recordKill(rule.kind);
+      } else if (rule?.rule === 'escort') {
         const needed = state.target - state.progress;
         for (let i = 0; i < needed; i++) campaign.recordEscortCheckpoint();
-      } else if (state.phase === 'trench') {
+      } else if (rule?.rule === 'checkpoints') {
         const needed = state.target - state.progress;
         for (let i = 0; i < needed; i++) campaign.recordCheckpoint();
-      } else if (state.phase === 'qte') {
-        for (const key of ['KeyA', 'KeyD', 'KeyW', 'Space']) campaign.qteInput(key);
-      } else if (state.phase === 'cinematic') campaign.update(13);
+      } else if (rule?.rule === 'qte') {
+        for (const stage of state.mission?.qte || []) campaign.qteInput(stage.key);
+      } else if (rule?.rule === 'cinematic') {
+        campaign.update(13);
+      } else if (rule?.rule === 'assault') {
+        for (let i = state.assault.kills; i < state.assault.targetKills; i++) campaign.recordKill('tie');
+        if (campaign.getSnapshot().phase === 'assault') campaign.recordCheckpoint();
+      }
       syncCampaign(); emitSnapshot();
       return getSnapshot();
     },

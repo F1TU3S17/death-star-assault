@@ -27,9 +27,14 @@ test('Space and left mouse fire physical shots that destroy TIEs during normal f
       assert.ok(laser?.speed > 0);
       let observedTargetMotion = false;
       let firstShot = true;
-      if (input === 'keyboard') fixture.key('Space');
-      else fixture.canvas.dispatch('mousedown', { button: 0 });
-      for (let frame = 0; frame < 260 && game.getSnapshot().kills === 0; frame++) {
+      let cooling = 0;
+      const hold = held => {
+        if (input === 'keyboard') fixture.key('Space', held);
+        else if (held) fixture.canvas.dispatch('mousedown', { button: 0 });
+        else fixture.canvas.dispatch('mouseup', { button: 0 });
+      };
+      hold(true);
+      for (let frame = 0; frame < 400 && game.getSnapshot().kills === 0; frame++) {
         const current = debug.inspect().enemies.find(enemy => enemy.id === targetId);
         assert.ok(current?.health > 0, 'manual fire must defeat the tracked TIE rather than a replacement');
         const origin = player.position;
@@ -38,6 +43,10 @@ test('Space and left mouse fire physical shots that destroy TIEs during normal f
         if (targetVelocity.lengthSq() > 1e-6) observedTargetMotion = true;
         const lead = getLeadSolution({ origin, targetPosition, targetVelocity, projectileSpeed: laser.speed });
         player.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), new THREE.Vector3(lead.direction.x, lead.direction.y, lead.direction.z));
+        // Trigger discipline: an overheated cannon locks out, so the pilot lets it cool.
+        if (game.getSnapshot().heat >= 85) { hold(false); cooling = 24; }
+        else if (cooling > 0) { cooling -= 1; }
+        else hold(true);
         debug.step(0.025);
         if (firstShot) {
           assert.ok(debug.inspect().projectileDetails.some(projectile => projectile.owner === 'player'), `${camera}/${input} must launch`);
@@ -46,8 +55,7 @@ test('Space and left mouse fire physical shots that destroy TIEs during normal f
           firstShot = false;
         }
       }
-      if (input === 'keyboard') fixture.key('Space', false);
-      else fixture.canvas.dispatch('mouseup', { button: 0 });
+      hold(false);
       assert.ok(observedTargetMotion, 'lead aiming must use the TIE’s observed in-flight velocity');
       assert.ok(game.getSnapshot().kills >= 1, `${camera}/${input} must kill through projectile collisions`);
       assert.ok(player.position.distanceTo(startingPosition) > 0.1, 'the player continues moving through normal flight while firing');

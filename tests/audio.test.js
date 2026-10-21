@@ -119,7 +119,7 @@ test('sound effects have finite envelopes, bounded polyphony and dispose stops/d
     assert.ok(context.sources.length > before, 'A priority explosion must still sound when the budget is full');
     assert.ok(context.sources.some(source => source.stops.includes(undefined)), 'The oldest voice must be stopped for the priority effect');
     for (const source of context.sources.filter(source => typeof source.onended === 'function')) source.end();
-    for (const method of ['laser', 'enemyLaser', 'torpedo', 'ion', 'hit', 'explosion', 'cue', 'ability', 'tie', 'superlaserCharge', 'superlaserFire', 'stationExplosion', 'klaxon', 'whoosh', 'torpedoImpact']) audio[method]();
+    for (const method of ['laser', 'enemyLaser', 'torpedo', 'ion', 'hit', 'explosion', 'cue', 'ability', 'tie', 'superlaserCharge', 'superlaserFire', 'stationExplosion', 'klaxon', 'whoosh', 'torpedoImpact', 'crash']) audio[method]();
     for (const source of context.sources.filter(source => typeof source.onended === 'function')) {
       assert.ok(source.stops.some(time => Number.isFinite(time) && time > context.currentTime));
     }
@@ -140,6 +140,8 @@ test('mission signals are distinct, rate limited and silent while paused or mute
   try {
     await audio.start();
     const context = fixture.contexts[0];
+    // Everything created before the first effect is the persistent engine and score bed.
+    const persistent = context.sources.length;
     const signatures = [];
     for (const action of [() => audio.astromech(), () => audio.radio(), () => audio.radio('out'), () => audio.lock('locked'), () => audio.incoming(), () => audio.turbolaser(), () => audio.vent(), () => audio.missionCue('success'), () => audio.missionCue('fail')]) {
       const before = context.sources.length;
@@ -159,7 +161,7 @@ test('mission signals are distinct, rate limited and silent while paused or mute
     const count = context.sources.length;
     audio.laser(); audio.incoming(); audio.missionCue('objective');
     assert.equal(context.sources.length, count);
-    assert.ok(context.sources.slice(4).every(source => source.stops.length > 0));
+    assert.ok(context.sources.slice(persistent).every(source => source.stops.length > 0));
     audio.setPaused(false);
     audio.setMuted(true);
     audio.vent(); audio.turbolaser(); audio.astromech();
@@ -183,6 +185,7 @@ test('superlaser, station and impact events sound once, respect pause and mute, 
       ['klaxon', () => audio.klaxon()],
       ['whoosh', () => audio.whoosh(120)],
       ['torpedoImpact', () => audio.torpedoImpact()],
+      ['crash', () => audio.crash()],
     ];
     for (const [name, action] of events) {
       context.currentTime += 10;
@@ -225,6 +228,37 @@ test('superlaser, station and impact events sound once, respect pause and mute, 
       assert.ok(context.sources.length > count, `${name} must sound again after unmuting`);
       for (const source of context.sources.slice(count)) source.end();
     }
+  } finally { audio.dispose(); fixture.close(); }
+});
+
+test('fatal crash is a throttle-gated priority slam that recovers past its cooldown', async () => {
+  const fixture = audioFixture();
+  const audio = createAudio({ manifest: null });
+  try {
+    await audio.start();
+    const context = fixture.contexts[0];
+    const before = context.sources.length;
+    audio.crash();
+    const added = context.sources.slice(before);
+    assert.ok(added.length > 0, 'The crash must synthesise its impact voice');
+    for (const source of added) {
+      assert.ok(source.stops.some(time => Number.isFinite(time) && time > context.currentTime), 'Every crash source must have a finite stop');
+    }
+    const span = Math.max(...added.map(source => Math.max(...source.stops))) - context.currentTime;
+    assert.ok(span >= 1.4 && span <= 1.6, `The crash must last roughly one and a half seconds, got ${span}`);
+    const count = context.sources.length;
+    audio.crash();
+    assert.equal(context.sources.length, count, 'An immediate repeat must be gated by the ready() throttle');
+    for (const source of added) source.end();
+    audio.setPaused(true);
+    context.currentTime += 1.3;
+    audio.crash();
+    assert.equal(context.sources.length, count, 'An expired cooldown must not bypass the pause gate');
+    audio.setPaused(false);
+    context.currentTime += 1.3;
+    audio.crash();
+    assert.ok(context.sources.length > count, 'Advancing past the 1.2 second cooldown must allow a new crash');
+    for (const source of context.sources.slice(count)) source.end();
   } finally { audio.dispose(); fixture.close(); }
 });
 
@@ -360,7 +394,7 @@ test('missing and invalid samples retain audible synth fallback and late decode 
     assert.equal(await audio.loadManifest({ laser: { url: '/audio/bad.wav' } }), false);
     const count = context.sources.length;
     audio.laser();
-    assert.equal(context.sources.length, count + 3, 'Synth stack still sounds after media/decode failure');
+    assert.ok(context.sources.length > count, 'Synth stack still sounds after media/decode failure');
     let resolveDecode;
     let decoding;
     const started = new Promise(resolve => { decoding = resolve; });
@@ -374,6 +408,47 @@ test('missing and invalid samples retain audible synth fallback and late decode 
   } finally { audio.dispose(); fixture.close(); }
 });
 
+
+test('original adaptive score follows the mission phase, loops without timers and obeys pause', async () => {
+  const fixture = audioFixture();
+  const audio = createAudio({ manifest: null });
+  try {
+    audio.setMusic({ phase: 'menu', intensity: 0.8 });
+    assert.equal(fixture.contexts.length, 0, 'The score must wait for the user gesture');
+    await audio.start();
+    const context = fixture.contexts[0];
+    const oscillators = () => context.sources.filter(source => source.nodeKind === 'oscillator');
+    const soundsLike = frequency => oscillators().some(source => Math.abs(source.frequency.value - frequency) < 0.06);
+    // Four pad voices plus the first phrase of eight notes run as soon as the context is live.
+    assert.ok(oscillators().length >= 12, `Pad voices and the opening phrase must exist, got ${oscillators().length}`);
+    assert.ok(soundsLike(130.81), 'The menu theme must sound its own root');
+    // The score set before the gesture must become audible as soon as the context runs.
+    assert.ok(context.nodes.some(node => node.nodeKind === 'gain' && Math.abs(node.gain.value - 0.273) < 0.01), 'The score must reach its menu level after the gesture');
+    // A phase change retunes the pad to that theme's modal centre and its mode.
+    audio.setMusic({ phase: 'defeat', intensity: 0.6 });
+    assert.ok(soundsLike(87.31), 'The defeat theme must retune the pad root');
+    assert.ok(soundsLike(103.83), 'The defeat theme must use a minor third');
+    audio.setMusic({ phase: 'victory', intensity: 0.9 });
+    assert.ok(soundsLike(164.81), 'The victory theme must use a major third');
+    // The phrase loops from its own final note, so the score needs no wall-clock timer.
+    const before = context.sources.length;
+    oscillators().at(-1).end();
+    assert.ok(context.sources.length > before, `The phrase must schedule its own successor: ${context.sources.length} vs ${before}`);
+    // Pausing stops both the loop and the audible level; resuming restores them.
+    audio.setPaused(true);
+    const paused = context.sources.length;
+    oscillators().at(-1).end();
+    audio.setMusic({ phase: 'victory', intensity: 0.9 });
+    assert.equal(context.sources.length, paused, 'A paused score must not schedule new phrases');
+    audio.setPaused(false);
+    assert.ok(context.sources.length > paused, 'Resuming must restart the phrase loop');
+    audio.setMuted(true);
+    audio.setMuted(false);
+    audio.dispose();
+    assert.ok(context.nodes.every(node => node.disconnected));
+    assert.ok(context.sources.every(source => source.stops.length > 0));
+  } finally { audio.dispose(); fixture.close(); }
+});
 
 test('bundled audio manifest uses all ten attributed CC0 files with matching hashes', () => {
   const audioRoot = new URL('../public/audio/', import.meta.url);

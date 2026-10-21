@@ -4,6 +4,7 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { createXWingSfoilRig } from './sfoils.js';
 import { addTrenchDetail, panelNormalTexture, makeStationSurfaceTexture, makeTrenchMetalTextures } from './world-detail.js';
 import { createDetailedCockpit } from './detailed-cockpit.js';
+import { createHothScene } from './hoth-scene.js';
 
 const silver = new THREE.MeshStandardMaterial({ color: 0xa3a9b0, roughness: 0.82, metalness: 0.35 });
 const dark = new THREE.MeshStandardMaterial({ color: 0x242c38, roughness: 0.72, metalness: 0.65 });
@@ -314,6 +315,10 @@ export function createWorld(scene) {
   const trench = new THREE.Group();
   const cinematic = new THREE.Group();
   scene.add(space, surface, trench, cinematic);
+  // Episode V lives on its own ice plain; the hangar hides it until a Hoth phase starts.
+  const hoth = createHothScene(scene);
+  scene.add(hoth.root);
+  hoth.setPhase('menu');
   const stars = new Float32Array(5000 * 3);
   for (let i = 0; i < stars.length; i += 3) {
     const u = Math.random() * Math.PI * 2;
@@ -708,6 +713,7 @@ export function createWorld(scene) {
 
   function setPhase(phase) {
     const isCinema = phase === 'cinematic' || phase === 'victory';
+    hoth.setPhase(phase);
     space.visible = ['menu', 'combat'].includes(phase);
     surface.visible = ['surface', 'escort', 'assault', 'defend', 'trench'].includes(phase);
     distantBattle.visible = ['combat', 'surface', 'escort', 'assault', 'defend'].includes(phase);
@@ -747,8 +753,9 @@ export function createWorld(scene) {
   setPhase('menu');
 
   return {
-    space, surface, trench, station, cinematic, checkpoints, setPhase, graphics,
-    update(time) {
+    space, surface, trench, station, cinematic, checkpoints, setPhase, graphics, hoth,
+    update(time, dt = 0) {
+      hoth.update(dt, { phase: graphics.phase });
       station.rotation.y = Math.sin(time * 0.02) * 0.04;
       for (const root of engineRoots) {
         if (root.userData.disposed) { engineRoots.delete(root); continue; }
@@ -921,6 +928,7 @@ export function createWorld(scene) {
     dispose() {
       if (disposed) return;
       disposed = true;
+      hoth.dispose();
       const geometries = new Set();
       const materials = new Set();
       const textures = new Set();
@@ -982,6 +990,36 @@ export function createTurret(kind = 'light') {
   root.add(head);
   root.userData.head = head;
   root.userData.kind = kind;
+  root.traverse(object => { if (object.isMesh) { object.castShadow = true; object.receiveShadow = true; } });
+  return root;
+}
+
+/** Imperial snow walker: squat hull, open cockpit, blaster and two reverse-jointed legs. */
+export function createAtSt() {
+  const root = new THREE.Group();
+  const head = new THREE.Group();
+  const visor = new THREE.MeshStandardMaterial({ color: 0x8f2418, emissive: 0xc03a22, emissiveIntensity: 0.9, roughness: 0.5, metalness: 0.2 });
+  box(root, dark, 0, 7.2, -0.6, 8, 4.4, 10);
+  box(root, silver, 0, 9.6, -1.6, 5.6, 1.1, 6.2);
+  box(root, red, 0, 5.4, 4.4, 3.2, 1.4, 2.2);
+  box(head, silver, 0, 0, 0, 5.4, 3, 4.6);
+  box(head, visor, 0, 0.4, 2.2, 4, 1.1, 0.5);
+  cylinder(head, dark, 0.5, 5, 0, -0.6, 4);
+  head.position.set(0, 8.2, 3);
+  for (const side of [-1, 1]) {
+    const hip = new THREE.Group();
+    hip.position.set(side * 3.2, 6, -0.4);
+    box(hip, silver, 0, -2, 0, 1.9, 4.2, 1.9);
+    const knee = new THREE.Group();
+    knee.position.set(0, -4.1, 0);
+    box(knee, dark, 0, -1.8, 0.5, 1.5, 3.8, 1.5);
+    box(knee, silver, 0, -3.7, 1, 2.3, 0.7, 3.2);
+    hip.add(knee);
+    root.add(hip);
+  }
+  root.add(head);
+  root.userData.head = head;
+  root.userData.kind = 'at-st';
   root.traverse(object => { if (object.isMesh) { object.castShadow = true; object.receiveShadow = true; } });
   return root;
 }

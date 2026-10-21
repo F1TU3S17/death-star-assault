@@ -1,7 +1,24 @@
 import { EPISODES } from './data.js';
 
 const QTE_KEYS = new Set(['KeyA', 'KeyD', 'KeyW', 'Space']);
+/** Progress rules of Episode IV stay explicit; other episodes declare their own in mission data. */
+const LEGACY_RULES = {
+  combat: { rule: 'kills', kind: 'tie' },
+  defend: { rule: 'kills', kind: 'tie' },
+  surface: { rule: 'kills', kind: 'turret' },
+  escort: { rule: 'escort' },
+  trench: { rule: 'checkpoints' },
+  assault: { rule: 'assault' },
+  qte: { rule: 'qte' },
+  cinematic: { rule: 'cinematic' },
+};
 const normalizeKey = (key) => ({ a: 'KeyA', A: 'KeyA', d: 'KeyD', D: 'KeyD', w: 'KeyW', W: 'KeyW', ' ': 'Space', Spacebar: 'Space' }[key] || key);
+
+/** The progress rule of a mission: declared by the mission, or inherited from Episode IV. */
+export function resolveProgressRule(mission) {
+  if (!mission) return null;
+  return mission.progress || LEGACY_RULES[mission.type] || null;
+}
 
 /** Pure campaign state machine. dt is seconds; geometry and combat stay in the engine. */
 export function createCampaign(episodeId = 'episode4') {
@@ -11,6 +28,7 @@ export function createCampaign(episodeId = 'episode4') {
   let failed, reason, complete, radio, sideProgress, assaultKills, assaultRallyReached;
 
   const current = () => episode.missions[missionIndex];
+  const ruleFor = (mission = current()) => mission.progress || LEGACY_RULES[mission.type] || null;
   const enter = (index) => {
     missionIndex = index;
     progress = 0;
@@ -29,7 +47,7 @@ export function createCampaign(episodeId = 'episode4') {
     else {
       complete = true;
       progress = current().target;
-      radio = { speaker: 'Управление Явина', text: 'Звезда Смерти уничтожена. Возвращайтесь домой.' };
+      radio = current().victoryRadio || { speaker: 'Управление Явина', text: 'Звезда Смерти уничтожена. Возвращайтесь домой.' };
     }
   };
   const fail = (message = 'Корабль потерян. Повторите кампанию.') => {
@@ -49,14 +67,14 @@ export function createCampaign(episodeId = 'episode4') {
 
   function getSnapshot() {
     const mission = current();
-    const qte = mission.type === 'qte' && active() ? {
+    const qte = mission.qte && active() ? {
       ...mission.qte[qteIndex], remaining: qteRemaining,
       totalRemaining: qteTotalRemaining, stage: qteIndex,
       progress: qteIndex, total: mission.qte.length,
     } : null;
     return {
       episodeId, missionIndex, phase: complete ? 'victory' : mission.type,
-      mission: { ...JSON.parse(JSON.stringify(mission)), index: missionIndex, progress },
+      mission: { ...JSON.parse(JSON.stringify(mission)), index: missionIndex, progress, progressRule: ruleFor() },
       progress, target: mission.target, radio: radio ? { ...radio } : null,
       qte, complete, failed, reason, elapsed,
       assault: mission.type === 'assault' ? {
@@ -73,11 +91,12 @@ export function createCampaign(episodeId = 'episode4') {
 
   function recordKill(kind) {
     if (!active()) return getSnapshot();
-    if (current().type === 'assault' && kind === 'tie') {
+    const rule = ruleFor();
+    if (rule?.rule === 'assault' && kind === 'tie') {
       assaultKills = Math.min(current().combatRoute.kills, assaultKills + 1);
       progress = assaultKills + Number(assaultRallyReached);
       if (assaultKills >= current().combatRoute.kills && assaultRallyReached) advance();
-    } else if ((['combat', 'defend'].includes(current().type) && kind === 'tie') || (current().type === 'surface' && kind === 'turret')) {
+    } else if (rule?.rule === 'kills' && rule.kind === kind) {
       progress += 1;
       if (progress >= current().target) advance();
     }
@@ -85,11 +104,12 @@ export function createCampaign(episodeId = 'episode4') {
   }
 
   function recordCheckpoint() {
-    if (active() && current().type === 'assault') {
+    const rule = active() ? ruleFor() : null;
+    if (active() && rule?.rule === 'assault') {
       assaultRallyReached = true;
       progress = assaultKills + 1;
       if (assaultKills >= current().combatRoute.kills) advance();
-    } else if (active() && current().type === 'trench') {
+    } else if (active() && rule?.rule === 'checkpoints') {
       progress += 1;
       if (progress >= current().target) advance();
     }
@@ -97,7 +117,8 @@ export function createCampaign(episodeId = 'episode4') {
   }
 
   function recordEscortCheckpoint() {
-    if (active() && current().type === 'escort') {
+    const rule = active() ? ruleFor() : null;
+    if (active() && rule?.rule === 'escort') {
       progress += 1;
       if (progress >= current().target) advance();
     }
@@ -113,9 +134,10 @@ export function createCampaign(episodeId = 'episode4') {
   }
 
   function qteInput(input) {
-    if (!active() || current().type !== 'qte') return false;
+    if (!active() || !current().qte) return false;
     const key = normalizeKey(input);
-    if (!QTE_KEYS.has(key)) return false;
+    const allowed = current().qteKeys ? new Set(current().qteKeys) : QTE_KEYS;
+    if (!allowed.has(key)) return false;
     if (key !== current().qte[qteIndex].key) {
       retryQte();
       return false;
@@ -130,7 +152,7 @@ export function createCampaign(episodeId = 'episode4') {
   function update(dt) {
     if (!active() || !Number.isFinite(dt) || dt <= 0) return getSnapshot();
     elapsed += dt;
-    if (current().type === 'qte') {
+    if (current().qte) {
       // Consume all elapsed windows, including long frames; no timeout can be skipped.
       let pending = dt;
       while (pending > 0 && active()) {
@@ -141,7 +163,7 @@ export function createCampaign(episodeId = 'episode4') {
         if (qteTotalRemaining === 0) fail('Время истекло. Звезда Смерти готова открыть огонь.');
         else if (qteRemaining === 0) retryQte();
       }
-    } else if (current().type === 'cinematic') {
+    } else if (ruleFor()?.rule === 'cinematic') {
       progress = Math.min(elapsed, current().duration);
       if (elapsed >= current().duration) advance();
     }

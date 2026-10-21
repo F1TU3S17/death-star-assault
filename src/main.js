@@ -3,14 +3,20 @@ import { createGame } from './game/engine.js';
 import { SHIPS, MISSIONS, EPISODES } from './game/data.js';
 import { shieldIcon, hullIcon, chevronIcon, weaponIcon } from './hud-icons.js';
 import { createTargetingHud } from './targeting-hud.js';
+import { layoutRadar } from './game/radar.js';
+import { createProgress } from './game/progress.js';
 
 const root = document.querySelector('#app');
 const episode = EPISODES.episode4 || Object.values(EPISODES)[0];
 let selectedShip = 'xwing';
+let selectedEpisode = 'episode4';
+const episodeList = Object.values(EPISODES);
 let snapshot = { mode: 'menu', camera: 'chase' };
 let game;
 let muted = false;
 let helpPaused = false;
+const progress = createProgress();
+let recordedRun = false;
 const clamp = (value, min = 0, max = 100) => Math.min(max, Math.max(min, Number(value) || 0));
 const time = (seconds = 0) => `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
 const shipGlyph = `<svg viewBox="0 0 100 70" aria-hidden="true"><path d="M48 6h4l5 33 31-18 4 6-31 21 31 12-3 5-34-9-3 9h-4l-3-9-34 9-3-5 31-12L8 27l4-6 31 18z"/></svg>`;
@@ -22,29 +28,34 @@ root.innerHTML = `
   <section class="menu screen" id="menu" aria-label="Главное меню">
     <header class="menu-header"><div class="wordmark" aria-label="Star Wars">STAR<br>WARS</div><span class="edition">ПОЛЁТНАЯ ХРОНИКА <i></i> 001</span><button class="text-button" data-help>УПРАВЛЕНИЕ <span>↗</span></button></header>
     <div class="menu-content">
-      <div class="eyebrow"><span class="tiny-diamond">◇</span> ЭПИЗОД IV <span class="rule"></span> НОВАЯ НАДЕЖДА</div>
-      <h1>АТАКА НА<br><span>ЗВЕЗДУ СМЕРТИ</span></h1>
-      <p class="menu-intro">Одна эскадрилья. Один шанс.<br>Ваша следующая цель — спасти Явин.</p>
-      <div class="briefing"><span class="label">ДОПУСК К ОПЕРАЦИИ / ЯВИН IV</span><p>${episode.briefing}</p></div>
+      <div class="eyebrow" id="menu-eyebrow"><span class="tiny-diamond">◇</span> ЭПИЗОД IV <span class="rule"></span> НОВАЯ НАДЕЖДА</div>
+      <h1 id="menu-title">АТАКА НА<br><span>ЗВЕЗДУ СМЕРТИ</span></h1>
+      <p class="menu-intro" id="menu-intro">Одна эскадрилья. Один шанс.<br>Ваша следующая цель — спасти Явин.</p>
+      <div class="briefing"><span class="label" id="menu-briefing-label">ДОПУСК К ОПЕРАЦИИ / ЯВИН IV</span><p id="menu-briefing">${episode.briefing}</p></div>
+      <div class="selection-label"><span class="label">00 / ВЫБЕРИТЕ ХРОНИКУ</span><span class="subtle">ПОЛЁТНАЯ ХРОНИКА</span></div>
+      <div class="episode-picker">${episodeList.map((entry) => `<button class="episode-card ${entry.id === selectedEpisode ? 'selected' : ''}" data-episode="${entry.id}" aria-pressed="${entry.id === selectedEpisode}"><span class="episode-number">${entry.number}</span><span class="episode-name">${entry.title}</span><small>${entry.subtitle}</small><span class="select-dot"></span></button>`).join('')}</div>
       <div class="selection-label"><span class="label">01 / ВЫБЕРИТЕ ИСТРЕБИТЕЛЬ</span><span class="subtle">АНГАР ПОВСТАНЦЕВ</span></div>
       <div class="ship-picker">${Object.values(SHIPS).map((ship, index) => `<button class="ship-card ${ship.id === selectedShip ? 'selected' : ''}" data-ship="${ship.id}" aria-pressed="${ship.id === selectedShip}"><span class="ship-number">0${index + 1}</span>${ship.id === 'ywing' ? ywingGlyph : shipGlyph}<span class="ship-card-name">${ship.name}<small>${ship.role}</small></span><span class="select-dot"></span></button>`).join('')}</div>
       <div class="ship-detail"><p id="ship-description"></p><div class="ship-stats"><div><span>СКОРОСТЬ</span><div class="stat-track"><i id="ship-speed"></i></div></div><div><span>ЗАЩИТА</span><div class="stat-track"><i id="ship-shield"></i></div></div><div><span>МАНЁВРЕННОСТЬ</span><div class="stat-track"><i id="ship-handling"></i></div></div></div><div class="ship-ability"><kbd>F</kbd><div><strong id="ability-name"></strong><p id="ability-description"></p></div></div></div>
       <button class="launch" id="start"><span>НАЧАТЬ ОПЕРАЦИЮ</span><span>↗</span></button>
-      <div class="mission-preview"><span>${String(MISSIONS.length).padStart(2, '0')} ЭТАПОВ</span><i></i><span>ПРИКРЫТИЕ ЭСКАДРИЛЬИ</span><i></i><span>КАБИНА / 3-Е ЛИЦО</span></div>
+      <p id="menu-progress" class="progress-line"></p>
+      <div class="mission-preview"><span id="menu-stage-count">${String(MISSIONS.length).padStart(2, '0')} ЭТАПОВ</span><i></i><span>ПРИКРЫТИЕ ЭСКАДРИЛЬИ</span><i></i><span>КАБИНА / 3-Е ЛИЦО</span></div>
     </div>
     <aside class="hangar-caption" aria-hidden="true"><span class="crosshair-small">+</span><span id="hangar-name">T-65 X-WING</span><small>БОЕВАЯ ГОТОВНОСТЬ <b>●</b></small></aside>
     <footer class="menu-footer"><span>НЕОФИЦИАЛЬНАЯ ФАН-ИГРА <span class="footer-separator">/</span> STAR WARS</span><div class="future"><span>СЛЕДУЮЩАЯ ХРОНИКА</span><strong>VI / ВОЗВРАЩЕНИЕ ДЖЕДАЯ</strong><span class="future-lock">A-WING · НЕДОСТУПНО</span></div></footer>
   </section>
   <section class="hud screen" id="hud" hidden aria-label="Полётные приборы">
     <div class="mission-panel"><div class="mission-title"><i></i><span id="mission-title"></span></div><p><span>◇</span><span id="objective"></span><b id="mission-progress"></b></p><div class="mission-track"><i id="mission-bar"></i></div></div>
-    <ol class="stages" aria-label="Этапы операции">${MISSIONS.map((mission, index) => `<li title="${mission.title}"><i></i><span>${index + 1}</span></li>`).join('')}</ol>
+    <ol class="stages" id="stages" aria-label="Этапы операции">${MISSIONS.map((mission, index) => `<li title="${mission.title}"><i></i><span>${index + 1}</span></li>`).join('')}</ol>
     <div class="flight-actions"><div class="clock">T + <span id="clock">00:00</span></div><div><button id="camera" title="Сменить камеру (C)" aria-label="Сменить камеру">КАБИНА <kbd>C</kbd></button><button id="sound" title="Звук" aria-label="Выключить звук">ЗВУК ◉</button><button id="pause" title="Пауза (Esc)" aria-label="Пауза">Ⅱ</button></div></div>
+    <div class="radar" id="radar" aria-hidden="true"></div>
     <div class="reticle" id="reticle" aria-hidden="true"><i></i><span></span><b>·</b></div>
     <div class="target-bracket" id="target" hidden aria-hidden="true"><span id="target-distance"></span></div>
     <div class="world-markers" id="world-markers" aria-hidden="true"></div>
     <div class="flight-telemetry"><div class="telemetry-heading"><span id="flight-ship">КРАСНЫЙ ПЯТЬ</span><span id="camera-label">ВНЕШНЯЯ КАМЕРА</span></div><div class="meter-row blue"><span>${shieldIcon}</span><div><label>ЩИТЫ <b id="shield-value">100</b></label><div class="meter"><i id="shield-bar"></i></div></div></div><div class="meter-row amber"><span>${hullIcon}</span><div><label>КОРПУС <b id="hull-value">100</b></label><div class="meter"><i id="hull-bar"></i></div></div></div><div class="flight-readings"><div><strong id="speed-value">0</strong><span>СКОРОСТЬ</span></div><div class="heat-reading"><span>НАГРЕВ ОРУДИЙ</span><div class="meter"><i id="heat-bar"></i></div></div></div><button class="ability-button" id="ability"><kbd>F</kbd><span id="flight-ability">Фокус щитов</span><b id="ability-cooldown">ГОТОВО</b></button></div>
     <aside class="squad-panel" id="squad-panel" hidden aria-label="Состояние ударной группы"><div class="label" id="squad-heading">ПРИКРЫТИЕ ЭСКАДРИЛЬИ</div><div id="allies-list"></div><p id="escort-hint"></p></aside>
     <aside class="side-objectives" id="side-objectives" hidden aria-label="Дополнительные задания"></aside>
+    <aside class="walker-panel" id="walker-panel" hidden aria-label="Шагоход AT-AT"><div class="label">ШАГОХОД AT-AT</div><div class="meter"><i id="walker-bar"></i></div><p id="walker-hint">Лобовая броня не пробивается — работайте по ногам и башне</p></aside>
     <div class="weapon-panel" id="weapon-panel" aria-label="Вооружение и боекомплект"><div class="weapon-heading"><span>ВООРУЖЕНИЕ</span><b id="weapon-lock">ЛАЗЕРЫ ГОТОВЫ</b></div><div class="weapon-selector"><button id="weapon-prev" aria-label="Предыдущее оружие">${chevronIcon('left')}</button><span class="weapon-silhouette" id="weapon-icon" aria-hidden="true">${weaponIcon('laser')}</span><div><strong id="weapon-name">Лазерные пушки</strong><span id="weapon-ammo">БОЕКОМПЛЕКТ ∞</span></div><button id="weapon-next" aria-label="Следующее оружие">${chevronIcon('right')}</button></div><div class="weapon-condition"><span id="weapon-state-label">НАГРЕВ</span><b id="weapon-state-value">0%</b></div><div class="weapon-state-track"><i id="weapon-state-bar"></i></div><div id="weapon-munitions" class="weapon-munitions" aria-hidden="true"></div><div id="weapon-slots" class="weapon-slots" aria-label="Выбор оружия"></div><button id="weapon-reload" class="weapon-reload" hidden><kbd>R</kbd> ПЕРЕЗАРЯДИТЬ ПУСКОВЫЕ</button></div>
     <details class="tactics-panel" id="tactics"><summary>БОРТОВЫЕ СИСТЕМЫ</summary><div class="power-controls" aria-label="Распределение энергии">${[['engines','1','ТЯГА'],['weapons','2','ОРУДИЯ'],['shields','3','ЩИТЫ'],['balanced','4','БАЛАНС']].map(([id,key,label]) => `<button data-power="${id}" aria-pressed="${id === 'balanced'}"><kbd>${key}</kbd>${label}</button>`).join('')}</div><p id="power-description"></p><label class="system-choice" for="repair-target">ПРИОРИТЕТ РЕМОНТА · B<select id="repair-target"><option value="hull">КОРПУС</option><option value="engines">ДВИГАТЕЛИ</option><option value="weapons">ОРУЖИЕ</option><option value="sensors">СЕНСОРЫ</option></select></label><div id="systems-status" class="systems-status" aria-label="Состояние систем"></div><button id="repair"><kbd>V</kbd><span>АСТРОДРОИД</span><b id="repair-status"></b></button><label class="system-choice" for="wing-order">ПРИКАЗ ВЕДОМЫМ · G<select id="wing-order"><option value="cover">ПРИКРЫТИЕ</option><option value="attack">АТАКА ЦЕЛИ</option><option value="escort">ЗАЩИТА ЭСКОРТА</option></select></label><button id="support"><kbd>T</kbd><span>ВЫЗВАТЬ ВЕДОМЫХ</span><b id="support-status"></b></button><button id="sfoils"><kbd>X</kbd><span>S-FOILS</span><b id="sfoils-status"></b></button></details>
     <div class="radio-panel"><div class="radio-message" id="radio"><span class="radio-avatar" id="radio-avatar" role="img" aria-label="Генерал Додонна"></span><strong id="radio-speaker">УПРАВЛЕНИЕ ЯВИНА</strong><p id="radio-text">Все группы, приготовиться к атаке.</p></div><div class="key-hints"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> КУРС</span><span><kbd>←</kbd><kbd>→</kbd> ОРУЖИЕ</span><span><kbd>SHIFT</kbd> УСКОРЕНИЕ</span><span><kbd>SPACE</kbd> ОГОНЬ</span></div></div>
@@ -55,7 +66,7 @@ root.innerHTML = `
   <div class="cinematic-caption" id="cinematic" hidden><span>ЭПИЗОД IV</span><h2>Один выстрел меняет всё.</h2><p>Красный Пять · торпеды выпущены</p></div>
   <div class="toast" id="toast" role="status" hidden></div>
   <section class="overlay" id="pause-overlay" hidden aria-label="Пауза"><div class="modal"><span class="eyebrow">ОПЕРАЦИЯ ПРИОСТАНОВЛЕНА</span><h2>Держим позицию.</h2><p>Эскадрилья ждёт вашего возвращения.</p><button class="launch" id="resume">ПРОДОЛЖИТЬ <span>↗</span></button><label class="graphics-setting" for="graphics-quality"><span>КАЧЕСТВО ГРАФИКИ</span><select id="graphics-quality"><option value="hd">HD · ЧЁТКОЕ ИЗОБРАЖЕНИЕ</option><option value="performance">ПРОИЗВОДИТЕЛЬНОСТЬ</option></select></label><button class="secondary" data-help>Управление</button><button class="secondary" id="restart">Начать вылет заново</button><button class="text-button" id="back-menu">В главный ангар</button></div></section>
-  <section class="overlay" id="result-overlay" hidden aria-label="Результат операции"><div class="modal result"><span class="eyebrow" id="result-eyebrow"></span><h2 id="result-title"></h2><p id="result-description"></p><div class="result-stats"><div><span>ВРЕМЯ ВЫЛЕТА</span><strong id="result-time"></strong></div><div><span>СБИТЫЕ ЦЕЛИ</span><strong id="result-kills"></strong></div><div><span>БОНУС ЗА ЦЕЛИ</span><strong id="result-bonus">0</strong></div><div><span>ДОП. ЦЕЛИ</span><strong id="result-objectives">0 / 0</strong></div></div><button class="launch" id="replay">ПОВТОРИТЬ ВЫЛЕТ <span>↗</span></button><button class="secondary" id="result-menu">Вернуться в ангар</button></div></section>
+  <section class="overlay" id="result-overlay" hidden aria-label="Результат операции"><div class="modal result"><span class="eyebrow" id="result-eyebrow"></span><h2 id="result-title"></h2><p id="result-description"></p><div class="result-stats"><div><span>ВРЕМЯ ВЫЛЕТА</span><strong id="result-time"></strong></div><div><span>СБИТЫЕ ЦЕЛИ</span><strong id="result-kills"></strong></div><div><span>БОНУС ЗА ЦЕЛИ</span><strong id="result-bonus">0</strong></div><div><span>ДОП. ЦЕЛИ</span><strong id="result-objectives">0 / 0</strong></div><div><span>ТОЧНОСТЬ</span><strong id="result-accuracy">—</strong></div></div><p id="result-record" class="result-record"></p><button class="launch" id="replay">ПОВТОРИТЬ ВЫЛЕТ <span>↗</span></button><button class="secondary" id="result-menu">Вернуться в ангар</button></div></section>
   <dialog id="help" class="help-dialog"><button class="close-help" id="close-help" aria-label="Закрыть управление">×</button><span class="eyebrow">ПАМЯТКА ПИЛОТА</span><h2>Управление кораблём</h2><div class="help-grid"><span>Курс / тангаж и рыскание</span><kbd>W A S D</kbd><span>Предыдущее / следующее оружие</span><span><kbd>← ↓</kbd> / <kbd>→ ↑</kbd></span><span>Перезарядить торпедные пусковые</span><kbd>R</kbd><span>Энергия: тяга / оружие / щиты / баланс</span><kbd>1 / 2 / 3 / 4</kbd><span>Выбор системы / ремонт</span><kbd>B / V</kbd><span>Приказ ведомым</span><kbd>G</kbd><span>Вызвать двух ведомых</span><kbd>T</kbd><span>Крылья X-wing: крейсер / атака</span><kbd>X</kbd><span>Крен</span><span><kbd>Q</kbd> / <kbd>E</kbd></span><span>Ускорение</span><kbd>SHIFT</kbd><span>Торможение / малая тяга</span><kbd>CTRL</kbd><span>Огонь выбранным оружием</span><span><kbd>ПРОБЕЛ</kbd> / ЛКМ</span><span>Оборудование корабля</span><kbd>F</kbd><span>Кабина / внешняя камера</span><kbd>C</kbd><span>Пауза</span><kbd>ESC</kbd></div><p>1–4 перераспределяют энергию: усиление одной системы имеет цену. B выбирает корпус, двигатели, оружие или сенсоры для ремонта. V восстанавливает 25 единиц корпуса либо 40% выбранной системы за 3 секунды (два заряда); попадание прерывает ремонт, огонь на время отключён. G меняет приказ: прикрытие, атака вашей цели или защита наиболее повреждённого союзника. T вызывает двух ведомых на 10 секунд (три вызова). X складывает или раскрывает S-foils; ускорение сохраняет боевое положение. При сложенных или движущихся крыльях оружие заблокировано: раскройте их клавишей X. Лазеры летят вдоль носа корабля: совмещайте прицел с голубым маркером упреждения. Удерживайте цель в секторе 1,7 секунды для наведения торпеды. Ранний пуск расходует боеприпас и летит без наведения. Ctrl снижает тягу для точного боя. Стрелки переключают лазеры, протонные торпеды и ионные пушки Y-wing. R перезаряжает торпедные пусковые за 4,5 секунды из конечного запаса. Рамка захвата подтверждает цель. При сопровождении держитесь рядом с союзниками и защищайте их от TIE. Красная рамка отмечает ближайшую угрозу. В траншее проходите светящиеся створы. Для пуска торпед нажимайте указанную клавишу до окончания отсчёта.</p><p class="help-note">При сканировании уменьшите тягу клавишей Ctrl и держите синий сенсор в прицеле 3 секунды. Маркер Золотой пары подсвечен янтарным. В траншее следите за янтарным предупреждением вентиля и стреляйте по регулятору охлаждения.</p><p class="help-note">X-wing и Y-wing участвовали в битве при Явине. A-wing появится в будущих эпизодах. Характеристики и способности адаптированы для аркадной игры.</p><button class="launch" id="help-done">ПОНЯТНО <span>↗</span></button></dialog>
   <div class="fatal overlay" id="fatal" hidden><div class="modal"><span class="eyebrow">НЕТ СВЯЗИ С АНГАРОМ</span><h2>Не удалось запустить 3D.</h2><p id="fatal-message">Для игры нужен браузер с поддержкой WebGL2. Включите аппаратное ускорение и обновите страницу.</p><button class="launch" onclick="location.reload()">ПОВТОРИТЬ <span>↗</span></button></div></div>
 `;
@@ -68,10 +79,36 @@ function setRadioPortrait(speaker = '') {
     : /Золотой Два/i.test(speaker) ? [100, 100, 'Золотой Два']
     : /Золотой/i.test(speaker) ? [100, 0, 'Золотой Лидер']
     : /Красный Лидер|Красная группа/i.test(speaker) ? [50, 0, 'Красный Лидер']
+    : /Хота/i.test(speaker) ? [0, 0, 'Управление Хота']
+    : /транспорт/i.test(speaker) ? [50, 0, 'Штурман транспорта']
     : [0, 0, 'Генерал Додонна'];
   $('radio-avatar').style.backgroundPosition = `${portraits[0]}% ${portraits[1]}%`;
   $('radio-avatar').setAttribute('aria-label', portraits[2]);
 }
+/** The hangar offers every chronicle; the engine campaign follows the choice. */
+function applyEpisode(id) {
+  const entry = EPISODES[id] || EPISODES.episode4;
+  selectedEpisode = entry.id;
+  document.querySelectorAll('[data-episode]').forEach((button) => {
+    const active = button.dataset.episode === entry.id;
+    button.classList.toggle('selected', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  $('menu-eyebrow').innerHTML = `<span class="tiny-diamond">◇</span> ЭПИЗОД ${entry.number} <span class="rule"></span> ${String(entry.title).toUpperCase()}`;
+  $('menu-title').innerHTML = entry.headline || entry.title;
+  $('menu-intro').innerHTML = entry.intro || entry.subtitle || '';
+  $('menu-briefing-label').textContent = `ДОПУСК К ОПЕРАЦИИ / ${entry.accessLabel || entry.subtitle || ''}`;
+  $('menu-briefing').textContent = entry.briefing || '';
+  $('menu-stage-count').textContent = `${String(entry.missions.length).padStart(2, '0')} ЭТАПОВ`;
+  $('stages').replaceChildren(...entry.missions.map((mission, index) => {
+    const item = document.createElement('li');
+    item.title = mission.title;
+    item.innerHTML = `<i></i><span>${index + 1}</span>`;
+    return item;
+  }));
+  game?.setEpisode?.(entry.id);
+}
+
 function selectShip(id) {
   selectedShip = id;
   const ship = SHIPS[id];
@@ -215,6 +252,30 @@ function updateRadar(state) {
     dot.style.left = `${50 + clamp(x, -1, 1) * 42}%`;
     dot.style.top = `${50 + clamp(y, -1, 1) * 42}%`;
   });
+}
+
+let radarSignature = '';
+function updateFlightRadar(state, mode) {
+  // Horizontal contact strip under the flight HUD: forward sector maps to
+  // -1..1 across the strip, contact behind the nose pins to the edge.
+  const strip = $('radar');
+  const contacts = [
+    ...(state.enemies || []),
+    ...(state.allies || []).map(ally => ({ ...ally, ally: true })),
+  ];
+  strip.hidden = !contacts.length || !['playing', 'paused'].includes(mode);
+  const ticks = layoutRadar(contacts);
+  const signature = ticks.map(tick => `${tick.marker}:${Math.round(tick.x * 50)}:${Math.round((Number(tick.distance) || 0) / 10)}`).join('|');
+  if (signature === radarSignature) return;
+  radarSignature = signature;
+  strip.replaceChildren(...ticks.map(tick => {
+    const dot = document.createElement('span');
+    dot.className = `radar-tick radar-tick--${tick.marker}${tick.behind ? ' radar-tick--behind' : ''}`;
+    const distance = Number(tick.distance) || 0;
+    dot.dataset.distance = distance <= 200 ? 'close' : distance <= 800 ? 'mid' : 'far';
+    dot.style.left = `calc(50% + ${(tick.x * 48).toFixed(2)}%)`;
+    return dot;
+  }));
 }
 
 let previousMode = 'menu';
@@ -382,7 +443,22 @@ function render(state) {
     $('target-distance').textContent = `${{ leader: 'ЛИДЕР', veteran: 'ВЕТЕРАН', novice: 'НОВИЧОК' }[targeting.pilotRole] || ''} ${{ bait: 'ОТВЛЕКАЕТ', flank: 'ФЛАНГ' }[targeting.squadRole] || ''} · ${Math.round(targeting.distance || 0)} М`.trim();
     $('target').classList.toggle('objective-target', targeting.kind === 'gate');
   }
+  updateFlightRadar(state, mode);
+  const walker = state.atAt;
+  const walkerPanel = $('walker-panel');
+  walkerPanel.hidden = !walker;
+  if (walker) {
+    $('walker-bar').style.width = `${clamp(walker.maxHealth ? walker.health / walker.maxHealth * 100 : 0)}%`;
+    $('walker-hint').textContent = walker.cabled ? 'Трос закреплён — машина теряет опору'
+      : walker.blocked ? 'Броня отвела удар — цельтесь в ноги и башню'
+      : walker.part === 'leg' ? 'Опорная нога повреждена'
+      : walker.part === 'turret' ? 'Башня повреждена' : 'Лобовая броня не пробивается — работайте по ногам и башне';
+  }
   updateRadar(state);
+  if (mode === 'menu') {
+    const tally = progress.get();
+    $('menu-progress').textContent = tally.runCount > 0 ? `РЕЙСОВ: ${tally.runCount} · ПОБЕД: ${tally.victoryCount} · РЕКОРД: ${tally.bestScore} ОЧКОВ` : '';
+  }
   if (state.qte) {
     const qte = state.qte;
     $('qte-label').textContent = qte.label || 'Удерживайте курс';
@@ -401,6 +477,15 @@ function render(state) {
     const content = state.content || {};
     $('result-bonus').textContent = String(Math.max(0, Math.round(Number(content.bonusScore) || 0)));
     $('result-objectives').textContent = `${Math.max(0, Math.round(Number(content.completedObjectives) || 0))} / ${Math.max(0, Math.round(Number(content.totalObjectives) || 0))}`;
+    const accuracy = state.accuracy;
+    $('result-accuracy').textContent = accuracy?.shots > 0 ? `${Math.round(accuracy.hits / accuracy.shots * 100)}%` : '—';
+    // One durable record per sortie: the flag is set on exactly the first
+    // result render and reset by every new-sortie entry point below.
+    if (!recordedRun) {
+      recordedRun = true;
+      const saved = progress.record({ victory: victory, missionId: state.mission?.id ?? 'unknown', score: state.tacticalScore ?? 0, elapsed: state.elapsed ?? 0, kills: state.kills ?? 0, shots: state.accuracy?.shots, hits: state.accuracy?.hits });
+      $('result-record').textContent = `Вылетов: ${saved.runCount} · Побед: ${saved.victoryCount} · Рекорд: ${saved.bestScore}`;
+    }
   }
   if (mode !== previousMode) {
     if (['menu', 'qte', 'cinematic', 'victory', 'defeat'].includes(mode)) {
@@ -433,6 +518,7 @@ function onEvent(event) {
 }
 
 function returnToMenu() {
+  recordedRun = false;
   if (game?.returnToMenu) game.returnToMenu();
   else location.reload();
 }
@@ -446,18 +532,20 @@ $('help').addEventListener('close', () => { if (helpPaused) game?.resume(); help
 $('help').addEventListener('keydown', (event) => event.stopPropagation());
 document.querySelectorAll('[data-help]').forEach((button) => button.addEventListener('click', showHelp));
 document.querySelectorAll('[data-ship]').forEach((button) => button.addEventListener('click', () => selectShip(button.dataset.ship)));
+document.querySelectorAll('[data-episode]').forEach((button) => button.addEventListener('click', () => applyEpisode(button.dataset.episode)));
 $('close-help').addEventListener('click', closeHelp);
 $('help-done').addEventListener('click', closeHelp);
 $('start').addEventListener('click', () => {
   $('start').blur();
+  recordedRun = false;
   game?.start({ shipId: selectedShip });
   showToast('WASD — курс · SPACE — огонь · CTRL — малая тяга');
 });
 $('pause').addEventListener('click', () => game?.pause());
 $('resume').addEventListener('click', () => { $('resume').blur(); game?.resume(); });
 $('graphics-quality').addEventListener('change', () => { game?.setGraphicsQuality?.($('graphics-quality').value); $('graphics-quality').blur(); });
-$('restart').addEventListener('click', () => { $('restart').blur(); game?.restart(); });
-$('replay').addEventListener('click', () => { $('replay').blur(); game?.restart(); });
+$('restart').addEventListener('click', () => { $('restart').blur(); recordedRun = false; game?.restart(); });
+$('replay').addEventListener('click', () => { $('replay').blur(); recordedRun = false; game?.restart(); });
 $('back-menu').addEventListener('click', returnToMenu);
 $('result-menu').addEventListener('click', returnToMenu);
 $('camera').addEventListener('click', () => { $('camera').blur(); game?.setCamera(snapshot.camera === 'cockpit' ? 'chase' : 'cockpit'); });
@@ -466,8 +554,8 @@ $('weapon-prev').addEventListener('click', () => { game?.cycleWeapon(-1); $('wea
 $('weapon-next').addEventListener('click', () => { game?.cycleWeapon(1); $('weapon-next').blur(); });
 $('weapon-reload').addEventListener('click', () => { game?.reloadWeapon(); $('weapon-reload').blur(); });
 document.querySelectorAll('[data-power]').forEach(button => button.addEventListener('click', () => { game?.setPowerMode(button.dataset.power); button.blur(); }));
-$('repair-target').addEventListener('change', event => game?.selectRepair(event.target.value));
-$('wing-order').addEventListener('change', event => game?.setWingOrder(event.target.value));
+$('repair-target').addEventListener('change', event => { game?.selectRepair(event.target.value); event.target.blur(); });
+$('wing-order').addEventListener('change', event => { game?.setWingOrder(event.target.value); event.target.blur(); });
 for (const [id, method] of [['repair', 'repair'], ['support', 'requestSupport'], ['sfoils', 'toggleSfoils']]) {
   $(id).addEventListener('click', () => { game?.[method](); $(id).blur(); });
 }
@@ -483,6 +571,7 @@ document.querySelectorAll('[data-hold]').forEach((button) => {
 
 if (matchMedia('(max-width: 760px), (max-height: 800px)').matches) $('tactics').open = false;
 selectShip(selectedShip);
+applyEpisode(selectedEpisode);
 try {
   game = createGame({ canvas: $('space'), ships: SHIPS, missions: MISSIONS, onSnapshot: render, onEvent });
 } catch (error) {

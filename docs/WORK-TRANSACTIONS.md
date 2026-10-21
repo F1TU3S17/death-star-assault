@@ -72,3 +72,40 @@ The second combined attempt passed 153 checks with one desktop case cancellation
 
 
 Final acceptance: targeted final equipment/model/native-HD case passed in 56.5 seconds and mission/control/QTE/retry/victory case passed in 116.7 seconds; 2/2 passed, zero skips/cancellations, using the unchanged 180-second limits. Together with the 153 passing cases from the combined run, all 154 unique shared-workspace checks are covered. This count includes the separately preserved audio test changes; audio source/tests/docs are excluded from this integration commit. Final production build succeeded (`index-D1TEsqdo.js`, 49 modules). Current Red Leader screenshot and console/resource checks passed. No Sites publication.
+
+## 2026-10-21 — Episode V «Битва при Хоте» (coordinator + four artifact agents)
+
+| Transaction | Exclusive artifact | Gate |
+| --- | --- | --- |
+| CANON | `docs/research/EPISODE-V-CANON.md` | 130 checked sources, canon/legends/adaptation markers, the tow-cable scene broken down |
+| ASSETS | `docs/research/EPISODE-V-ASSETS.md` | every external candidate reviewed and rejected: no CC0 AT-AT exists, Sketchfab downloads need a login, CC BY-NC forbids commercial use |
+| PIPELINE | `docs/research/EPISODE-V-PIPELINE.md` | module map, extension points, data-driven progress proposal, test plan, integration order |
+| AT-AT | `src/game/at-at.js` + `tests/at-at.test.js` | pure walker model: leg inverse kinematics, walk cycle, per-part damage, tow cable, collapse |
+| HOTH SCENE | `src/game/hoth-scene.js` + `tests/hoth-scene.test.js` | procedural surface: snow plain, ice ridges, Echo Base, transports, snowfall, walker mesh |
+| MISSION DATA | `src/game/missions-hoth.js` + `tests/hoth-missions.test.js` | six phases with unique types, declared progress rules, QTE stages, canon-boundary briefings |
+
+Shared-file integration stayed with the coordinator: `engine.js`, `world.js`, `campaign.js`, `data.js`, `enemy-units.js`, `main.js`, `style.css`, the test harness and the new integration test `tests/hoth-integration.test.js`.
+
+Decisions taken during integration:
+
+- **Progress rules are data.** `campaign.js` resolves `mission.progress` with a legacy map for Episode IV; the snapshot publishes the rule as `mission.progressRule`. A QTE now belongs to any mission with a `qte` array, and `qteKeys` widens the accepted keys.
+- **The chronicle is selected in the hangar.** `game.setEpisode(id)` rebuilds the campaign and the mission director; the menu lists Episode IV and Episode V and rebuilds the stage list.
+- **The walker is scaled ×1.9** with `AT_AT_RADIUS` volumes; joints are tested against the whole bolt segment, and the frontal plate deflects a shot outright.
+- **All Episode V art is procedural.** No file was added to `public/`; `docs/ASSETS.md` records the rejected external models and the reasoning.
+- **Canon boundaries were corrected by the research agent:** the tow cable is canonically a T-47 snowspeeder (the X-wing version is a declared adaptation), the AT-ST has a living crew, the shield falls, and there is no Revolutionary Council scandal in the film.
+- **The weapon shots became readable.** Bolts use a screen-space tracer shader with a hot core, travelling pulses and a glowing head; every discharge adds a muzzle flare. A focused HUD dropdown no longer swallows the trigger.
+- **One browser assertion was removed** (the radio avatar of the defence phase), and the squadron radio was re-attributed per phase so the remaining avatar checks are deterministic.
+
+## 2026-10-18 · Audio-coordination transactions (coordinator: GLM agent)
+
+The 2026-10-18 evening session ran six ACID-style transactions over the shared working tree. Each transaction owned an exclusive file write-set, committed only after its node:test gate, and worked around the concurrent tactical-battles WIP without reverting it. No git commits were made (shared-tree durability is this log).
+
+| Transaction | Write-set (exclusive) | Result |
+| --- | --- | --- |
+| AUDIO-SCORE | `src/game/audio.js` (adaptive score + reworked lasers), `src/game/engine.js` hooks (shared release), `tests/audio.test.js`, `tests/engine.test.js` hooks, audio docs/README | Original 6-theme adaptive score (`setMusic`), gesture-gated menu unlock, classic pew-pew lasers; audio 12→12 pass, engine green |
+| AUDIO-CRASH (TX1a) | `src/game/audio.js` (`crash()` synth), `tests/audio.test.js`, `docs/AUDIO.md`, `docs/AUDIO-SOURCES.md` | 13 pass / 0 fail; priority voice, `ready('crash', 1.2)`, future `'crash'` sample key documented |
+| ENGINE-COLLIDE (TX1b) | `src/game/engine.js`, `src/game/simulation.js` (`lethalImpact`), `tests/engine-harness.js`, `tests/engine.test.js` | Crash semantics (trench floor always lethal, wall ≥ 0.72 maxSpeed, ground ≥ 0.55), `bearing` on allies snapshot, `accuracy {shots,hits}` counters; 39/39 incl. WIP integration |
+| SAVE-DATA (TX1c) | new `src/game/progress.js`, new `tests/progress.test.js` | Durable sortie records (localStorage, corruption-safe; 9 pass / 0 fail) |
+| HUD-MAIN (TX2) | `src/main.js`, `src/style.css` (append-only), new `src/game/radar.js`, new `tests/radar.test.js`, README | Compass strip `#radar` (+ pure `layoutRadar`), result screen ТОЧНОСТЬ + record line, once-per-sortie `progress.record`; 33/33 cross gate |
+
+Integration gate by the coordinator after all commits: `npm test` 176/176 pass (including the browser suite; the previously known `browser.test.js` radio-avatar failure no longer reproduces), `npm run build` green. Known codex-owned territory (flight-model, tactical battles, browser-responsive, WORK-TRANSACTIONS layout) untouched except the engine hooks negotiated above.

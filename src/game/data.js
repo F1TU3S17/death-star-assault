@@ -1,5 +1,7 @@
 import { MISSIONS } from './missions.js';
+import { HOTH_MISSIONS } from './missions-hoth.js';
 export { MISSIONS } from './missions.js';
+export { HOTH_MISSIONS } from './missions-hoth.js';
 
 // Values are arcade balance units, not canonical technical specifications.
 export const SHIPS = {
@@ -43,6 +45,18 @@ export const EPISODES = {
     id: 'episode4', number: 'IV', title: 'Новая надежда',
     subtitle: 'Битва при Явине', location: 'Звезда Смерти · сектор Явина',
     ships: ['xwing', 'ywing'], missions: MISSIONS,
-    briefing: 'Планы станции раскрыли уязвимую тепловую шахту. Проложите путь сквозь TIE и батареи, войдите в траншею и помогите Красному Пять нанести решающий удар.',
+    headline: 'АТАКА НА<br><span>ЗВЕЗДУ СМЕРТИ</span>',
+    intro: 'Одна эскадрилья. Один шанс.<br>Ваша следующая цель — спасти Явин.',
+    accessLabel: 'ЯВИН IV',
+    briefing: 'Планы станции раскрыли уязвимую тепловую шахту. Пройдите сквозь TIE и батареи, войдите в траншею и помогите Красному Пять нанести решающий удар.',
+  },
+  episode5: {
+    id: 'episode5', number: 'V', title: 'Битва при Хоте',
+    subtitle: 'Ледяная крепость', location: 'Планета Хот · окрестности базы Повстанцев',
+    ships: ['xwing', 'ywing'], missions: HOTH_MISSIONS,
+    headline: 'БИТВА ПРИ<br><span>ХОТЕ</span>',
+    intro: 'Один шагающий танк. Один трос.<br>База обречена — люди нет.',
+    accessLabel: 'ХОТ V',
+    briefing: 'Империя высадилась на Хоте и идёт на базу Повстанцев. Энергощит падёт, транспорты ещё на площадке, а по снегу к ангарам идёт шагающий AT-AT. Сбейте блокаду, прорвите наземный штурм, ослабьте машину и обвийте её ногу буксирным тросом. База будет потеряна — Революция уйдёт.',
   },
 };

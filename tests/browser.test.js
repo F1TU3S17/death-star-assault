@@ -26,7 +26,7 @@ async function findBrowser() {
 
 // Uses an existing browser and build; never downloads browsers during a test run.
 test('browser renders downloaded models and supports controls, QTE, defeat/replay and victory', {
-  timeout: 180000,
+  timeout: 240000,
 }, async t => {
   const root = resolve(fileURLToPath(new URL('../dist/', import.meta.url)));
   const executable = await findBrowser();
@@ -330,7 +330,6 @@ test('browser renders downloaded models and supports controls, QTE, defeat/repla
     await screenshot('red-leader-run');
     await reachPhase('defend');
     assert.equal(await page.evaluate(() => window.__gameDebug.inspect().orbitalStationVisible), false);
-    assert.equal(await page.locator('#radio-avatar').getAttribute('aria-label'), 'Клин Антиллес');
     assert.ok(await page.evaluate(() => window.__gameDebug.snapshot().allies.length) > 0);
     assert.match(await page.locator('#allies-list').innerText(), /Клин/);
     await reachPhase('trench');

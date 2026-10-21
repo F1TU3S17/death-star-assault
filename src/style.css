@@ -2435,8 +2435,62 @@ body[data-mode=qte]::after { bottom: 0; }
 .systems-status .damaged { color: #ffba64; }
 .target-distance { white-space: normal; }
 
+/* Flight radar strip: forward contact compass under the flight actions.
+   The #radar overrides neutralize the shared .radar circular-scanner styles. */
+#radar {
+  position: absolute;
+  top: 84px;
+  right: 32px;
+  width: 230px;
+  height: 18px;
+  border: 1px solid #a0b0b93d;
+  border-radius: 3px;
+  background: #050a10a6;
+  box-shadow: none;
+  overflow: hidden;
+  z-index: 2;
+}
+#radar:before { content: none; }
+#radar:after { content: ''; position: absolute; top: 0; left: 50%; width: 1px; height: 100%; background: #a0d3e452; }
+.radar-tick { position: absolute; top: 50%; width: 5px; height: 3px; border-radius: 3px; transform: translate(-50%, -50%); }
+.radar-tick--enemy { background: #ff5a4d; }
+.radar-tick--vader { background: #b34dff; }
+.radar-tick--ally { background: #4dc3ff; }
+.radar-tick[data-distance=far] { opacity: .45; }
+.radar-tick--behind { opacity: .62; }
+.radar-tick--behind:after { content: ''; position: absolute; top: 4px; left: 50%; width: 5px; height: 4px; transform: translateX(-50%) rotate(45deg); border-right: 1px solid #c8d2da66; border-bottom: 1px solid #c8d2da66; }
+
+/* Durable sortie progress: muted one-line tallies, invisible when empty. */
+.progress-line { margin: 12px 0 0; color: #9fb0bd8f; font-size: 9px; letter-spacing: 1.4px; text-align: center; }
+.progress-line:empty { display: none; }
+.result-record { margin: -14px 0 18px; color: #9fb0bd9c; font-size: 10px; letter-spacing: 1px; text-align: center; }
+#result-overlay .result-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media(max-width:760px) {
+  /* The compact HUD reflows completely below this width: skip the strip. */
+  #radar { display: none; }
+  #result-overlay .result-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 8px; }
+  .result-record { margin-top: -10px; font-size: 9px; }
+}
+
 /* Tactical Battles: controls stay in the existing collapsible avionics panel. */
 .system-choice { display: grid; gap: 5px; margin: 9px 0; color: var(--hud-cyan); font-size: 8px; letter-spacing: .5px; }
 .system-choice select { width: 100%; min-height: 28px; background: #101923; color: #edf4f6; border: 1px solid #72828f70; border-radius: 2px; font: inherit; padding: 4px; }
 .systems-status { display: grid; gap: 3px; padding-bottom: 6px; color: #afc2cc; font-size: 8px; }
 .systems-status .damaged { color: #ffba64; }
+
+/* Chronicle picker in the hangar. */
+.episode-picker { display: flex; gap: 10px; margin-bottom: 18px; }
+.episode-card { flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 11px 12px 12px; color: var(--ivory); background: #0d1621b0; border: 1px solid #7894aa40; transition: border-color .2s, background .2s; }
+.episode-card:hover { border-color: #edbb6690; background: #151d26cc; }
+.episode-card.selected { border-color: var(--amber); background: #edbb6610; }
+.episode-number { color: #7894aa90; font-size: 9px; letter-spacing: 2px; }
+.episode-name { font-size: 15px; letter-spacing: 1px; text-transform: uppercase; }
+.episode-card small { color: #677e8f; font-size: 9px; letter-spacing: 1.4px; }
+.episode-card.selected .episode-name { color: var(--amber); }
+
+/* Episode V: the walker status strip. */
+.walker-panel { position: absolute; left: 32px; bottom: 210px; width: 280px; padding: 11px 13px 12px; color: var(--blue); background: #080c12c9; border: 1px solid #7894aa45; font-size: 9px; }
+.walker-panel .label { color: var(--amber); letter-spacing: 2px; margin-bottom: 7px; }
+.walker-panel .meter { height: 6px; background: #1b2733; overflow: hidden; }
+.walker-panel .meter i { display: block; height: 100%; background: linear-gradient(90deg, #a31212, #edbb66); transition: width .2s; }
+.walker-panel p { margin: 8px 0 0; color: #8fa3b4; line-height: 1.5; }

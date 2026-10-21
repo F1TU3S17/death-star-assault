@@ -54,6 +54,45 @@ export async function engineHarness() {
         gate.position.set(Math.sin(i * 1.3) * 12, -45, 500 - i * 550);
         return gate;
       }),
+      // Episode V needs a walker with addressable legs and a transport column.
+      hoth: (() => {
+        const walker = new Three.Group();
+        const legs = [];
+        for (let index = 0; index < 4; index += 1) {
+          const hip = new Three.Group();
+          hip.position.set(index % 2 ? 3.2 : -3.2, 6, index < 2 ? 4.4 : -4.4);
+          const knee = new Three.Group();
+          knee.position.y = -3.4;
+          const foot = new Three.Group();
+          foot.position.y = -3.6;
+          knee.add(foot);
+          hip.add(knee);
+          walker.add(hip);
+          legs.push({ hip, knee, foot });
+        }
+        const head = new Three.Group();
+        head.position.set(0, 12, 5);
+        const body = new Three.Group();
+        walker.add(head, body);
+        walker.scale.setScalar(1.9);
+      walker.userData.legs = legs;
+        walker.userData.head = head;
+        walker.userData.body = body;
+        const transports = Array.from({ length: 3 }, (_, index) => {
+          const group = new Three.Group();
+          group.position.set(0, 0, 70 - index * 40);
+          return { id: `transport-${index + 1}`, group, state: 'parked', progress: 0 };
+        });
+        return {
+          root: new Three.Group(),
+          atAt: { group: walker, legs, head, body },
+          transports,
+          update() {}, setPhase() {},
+          launchTransport(id) { const transport = transports.find(entry => entry.id === id); if (!transport) return false; transport.state = 'launching'; return true; },
+          getSnapshot() { return { phase: 'hoth', transports: transports.map(entry => ({ id: entry.id, state: entry.state })) }; },
+          dispose() {},
+        };
+      })(),
       setPhase() {}, update() {}, updateCinema() {}, dispose() {},
     };
   }
@@ -61,6 +100,15 @@ export async function engineHarness() {
   const record = name => (...args) => { audioCalls.push({ name, args }); };
   const dependencies = {
     Renderer, createShip, createWorld,
+    createAtSt() {
+      const root = new Three.Group();
+      const head = new Three.Group();
+      head.position.y = 8;
+      root.add(head);
+      root.userData.head = head;
+      root.userData.kind = 'at-st';
+      return root;
+    },
     createTurret(kind) {
       const mesh = new Three.Group();
       const head = new Three.Group();
@@ -74,7 +122,7 @@ export async function engineHarness() {
       return {
         muted: false,
         start: record('start'), cue: record('cue'), hit: record('hit'), laser: record('laser'),
-        explosion: record('explosion'), ability: record('ability'), radio: record('radio'), astromech: record('astromech'),
+        explosion: record('explosion'), crash: record('crash'), ability: record('ability'), radio: record('radio'), astromech: record('astromech'),
         incoming: record('incoming'), vent: record('vent'), ion: record('ion'), tie: record('tie'), lock: record('lock'),
         turbolaser: record('turbolaser'), enemyLaser: record('enemyLaser'),
         torpedo: record('torpedo'), torpedoImpact: record('torpedoImpact'), stationExplosion: record('stationExplosion'),
@@ -89,7 +137,7 @@ export async function engineHarness() {
   Object.assign(globalThis, { window, document, requestAnimationFrame: callback => { pendingFrame = callback; return 1; }, cancelAnimationFrame() {}, __engineTestDependencies: dependencies });
   let source = await readFile(new URL('../src/game/engine.js', import.meta.url), 'utf8');
   source = source.replace("import * as THREE from 'three';", `import * as ThreeCore from ${JSON.stringify(import.meta.resolve('three'))};\nconst THREE = { ...ThreeCore, WebGLRenderer: globalThis.__engineTestDependencies.Renderer };`);
-  source = source.replace(/import \{ createWorld, createShip, createTurret, createCockpit \} from '.\/world.js';/, 'const { createWorld, createShip, createTurret, createCockpit } = globalThis.__engineTestDependencies;');
+  source = source.replace(/import \{ createWorld, createShip, createTurret, createAtSt, createCockpit \} from '.\/world.js';/, 'const { createWorld, createShip, createTurret, createAtSt, createCockpit } = globalThis.__engineTestDependencies;');
   source = source.replace(/import \{ createAudio \} from '.\/audio.js';/, 'const { createAudio } = globalThis.__engineTestDependencies;');
   source = source.replace(/from '(\.\/[^']+)'/g, (_, relative) => `from ${JSON.stringify(new URL(`../src/game/${relative.slice(2)}`, import.meta.url).href)}`);
   const module = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}#${++harnessSequence}`);

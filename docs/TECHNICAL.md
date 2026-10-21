@@ -111,6 +111,24 @@ The renderer uses half-float HDR composer targets at CSS viewport resolution, bl
 
 Enemy brains use approach, telegraph, attack, break and reposition states with finite turn rates and firing cones. Their physical bolts lead observed target velocity. Evasion requires a visible approaching projectile and a reaction delay; aces react sooner. Escort attackers prioritize vulnerable allies, while corridor avoidance prevents trench reversals. Health and projectile damage are unchanged by this AI revision. Debug inspection reports attack states, targets, renderer statistics and world instance counts; tests verify finite transforms, interception, reaction windows and playable campaign progression.
 
+## Weapon bolt shaders and muzzle flashes
+
+Weapon bolts are no longer thin cylinders. `createBoltMaterial(color, { ion, beamWidth, beamLength, intensity })` in `engine.js` returns a `ShaderMaterial` that stretches a unit quad into a screen-space tracer: the quad keeps the flight axis of the bolt but is turned towards the camera around it, so a shot reads as a streak instead of a point. The vertex stage projects the flight axis, derives the streak direction in NDC, and keeps a perspective-correct length with a readable minimum (`max(projected, 0.07)`); the width follows the same rule (`max(projected * beamWidth / beamLength, 0.0075)`). The fragment stage draws a hot white core, a coloured glow, energy pulses travelling along the beam, a burning head and a dissolving tail; ion shots add a spiral modulation. The material is double-sided because the screen-space quad flips the winding of the source geometry.
+
+Every bolt also carries a camera-facing glow head (shared sprite materials, no per-shot allocation) so a shot flying straight away from the chase camera is still readable. `muzzleFlash(position, kind, size)` spawns a short additive flare where a weapon discharges; player lasers, ion shots, torpedo launches, wingman shots and enemy batteries all use it. Flares live 0.12 s, grow while fading, and are disposed with the projectile list.
+
+Firing input stays authoritative in `firePlayer()`: `Space`, the left mouse button and the touch `ОГОНЬ` button all reach the same trigger. A focused HUD dropdown (`<select>`) used to swallow the trigger, so the engine now releases a focused select before the shot and the avionics selects blur themselves after a change.
+
+## Episode V contracts
+
+**Episode selection.** `createGame` exposes `setEpisode(id)`: it rebuilds the campaign with `createCampaign(episodeId)` and the mission director with `createMissionDirector(EPISODES[episodeId].missions)`. The hangar renders one card per chronicle and rebuilds the stage list from the episode missions. `src/main.js` owns the picker; `src/game/data.js` owns the registry.
+
+**Progress rules are data, not branches.** A mission declares `progress: { rule, kind, target }`; `campaign.js` keeps a legacy map for Episode IV and resolves the rule through `resolveProgressRule(mission)`. Supported rules: `kills`, `escort`, `checkpoints`, `assault`, `qte`, `cinematic`. The snapshot exposes the resolved rule as `mission.progressRule`, because `mission.progress` is the numeric HUD percentage. A QTE is owned by any mission with a `qte` array, and `qteKeys` widens the accepted keys.
+
+**The walker.** `src/game/at-at.js` is a pure model: leg inverse kinematics, walk cycle, damage multipliers per part, tow cable and collapse. The engine owns the body: `spawnAtAt()`, `updateAtAt()`, `atAtHitPart()`. The walker group is scaled by `AT_AT_SCALE` and its hit volumes by `AT_AT_RADIUS`; joints are tested against the whole bolt segment, so a fast bolt cannot slip past a leg. The frontal plate deflects a shot outright, the leg joints and the turret take damage. `world.hoth` owns the procedural surface: snow plain, ice ridges, Echo Base, transports, snowfall and the walker mesh.
+
+**Episode V is procedural.** No external model, texture or licence was added for Hoth; see `docs/ASSETS.md` and `docs/research/EPISODE-V-ASSETS.md`.
+
 ## Verification and references
 
 Test damage/shield arithmetic, mission order and conditions, pause clocks, QTE failure/retry/success, and final victory timing. Browser smoke tests cover menu selection, launch, both cameras, turning/boost/fire/ability, pause/resume, mission HUD, restart and downloaded model requests. Record real failures separately from test shortcuts; debug controls must not be the only way to finish a mission. Browser QA can inspect `window.__gameDebug.snapshot()` and `.inspect()`, hold/release keys with `.input(code, held)`, advance simulation via `.step(seconds)`, and isolate stages through `.advanceMission()`; no debug shortcuts appear in the UI.

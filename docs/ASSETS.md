@@ -86,6 +86,12 @@ the original notices are retained as `Oswald-OFL.txt` and
 `RobotoCondensed-OFL.txt`. Sources: [Oswald](https://github.com/google/fonts/tree/main/ofl/oswald)
 and [Roboto Condensed](https://github.com/google/fonts/tree/main/ofl/robotocondensed).
 
+## Episode V assets: fully procedural
+
+The Hoth chronicle ships **no downloaded model**. The ice plain, the ice ridges, Echo Base, the Rebel transports, the AT-ST and the AT-AT are assembled from Three.js primitives in `src/game/hoth-scene.js` and `src/game/world.js`, and the walker's stride is a procedural inverse-kinematics cycle in `src/game/at-at.js`. No file, texture or licence was added to `public/` for Episode V.
+
+External models were reviewed and **rejected**: every free AT-AT found on Sketchfab is CC BY (attribution required, download behind a login) or CC BY-NC (commercial use forbidden), and no CC0 AT-AT exists. The review, with links, authors, licences, triangle counts and the procedural fallbacks, is recorded in [research/EPISODE-V-ASSETS.md](research/EPISODE-V-ASSETS.md). If a licensed walker is ever added, its author and licence must be listed in this file first.
+
 ## Asset Validation
 
 `public/portraits/radio-atlas.png` — единый атлас 3×2 оригинальных портретов,

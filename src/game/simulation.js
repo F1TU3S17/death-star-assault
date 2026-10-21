@@ -5,6 +5,21 @@ export function absorbDamage(health, shields, amount) {
   return { health: Math.max(0, health - (damage - absorbed)), shields: Math.max(0, shields - absorbed) };
 }
 
+/**
+ * Decides whether a solid-geometry contact destroys the fighter outright.
+ * Trench floors are always fatal, trench walls only above 72% of the ship's
+ * rated speed, and the Death Star surface above 55%. A non-positive maxSpeed
+ * is treated as no rated speed: nothing can be measured against it.
+ */
+export function lethalImpact({ speed, maxSpeed, kind }) {
+  const max = Number(maxSpeed) || 0;
+  if (max <= 0) return false;
+  if (kind === 'floor') return true;
+  if (kind === 'wall') return (Number(speed) || 0) >= max * 0.72;
+  if (kind === 'ground') return (Number(speed) || 0) >= max * 0.55;
+  return false;
+}
+
 /** Segment collision avoids fast bolts tunnelling between render frames. */
 export function segmentSphereHit(start, end, center, radius) {
   const dx = end.x - start.x;

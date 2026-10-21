@@ -13,6 +13,9 @@ const SPECS = {
   relay: {
     relay: { health: 35, radius: 16, modelKind: 'relay', movement: 'stationary', canFire: false },
   },
+  'at-st': {
+    walker: { health: 90, radius: 9, modelKind: 'at-st', movement: 'stationary', canFire: true },
+  },
 };
 
 /** Return a fresh, episode-agnostic specification for an enemy unit. */
@@ -26,7 +29,9 @@ export function getEnemyUnitSpec(kind = 'tie', variant = 'line') {
         ? variant
         : resolvedKind === 'turret'
           ? 'light'
-          : 'line';
+          : resolvedKind === 'at-st'
+            ? 'walker'
+            : 'line';
   const spec = SPECS[resolvedKind]?.[resolvedVariant] ?? SPECS.tie.line;
   return { ...spec };
 }

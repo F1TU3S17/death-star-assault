@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { engineHarness } from './engine-harness.js';
 import { engineReachPhase } from './campaign-fixtures.js';
+import { lethalImpact } from '../src/game/simulation.js';
 
 test('actual engine flies, turns, fires, changes camera, pauses and freezes cooldowns', async () => {
   const fixture = await engineHarness();
@@ -407,5 +408,62 @@ test('the death star cine lands the torpedo impact before the station explosion'
     assert.ok(impact > -1, 'The torpedoes must strike the shaft');
     assert.ok(station > -1, 'The station must detonate');
     assert.ok(impact < station, 'The impact must land before the chain reaction');
+  } finally { fixture.close(); }
+});
+
+test('lethalImpact makes floor hits always fatal and gates walls and ground by speed', () => {
+  assert.equal(lethalImpact({ speed: 0, maxSpeed: 300, kind: 'floor' }), true);
+  assert.equal(lethalImpact({ speed: 300 * 0.69, maxSpeed: 300, kind: 'wall' }), false);
+  assert.equal(lethalImpact({ speed: 300 * 0.72, maxSpeed: 300, kind: 'wall' }), true);
+  assert.equal(lethalImpact({ speed: 300 * 0.75, maxSpeed: 300, kind: 'wall' }), true);
+  assert.equal(lethalImpact({ speed: 300 * 0.55, maxSpeed: 300, kind: 'ground' }), true);
+  assert.equal(lethalImpact({ speed: 300 * 0.54, maxSpeed: 300, kind: 'ground' }), false);
+  assert.equal(lethalImpact({ speed: 300, maxSpeed: 0, kind: 'wall' }), false);
+  assert.equal(lethalImpact({ speed: 300, maxSpeed: 0, kind: 'floor' }), false);
+});
+
+test('a trench floor impact is an instant crash with its own sound and reason', async () => {
+  const fixture = await engineHarness();
+  try {
+    const { game, debug } = fixture;
+    game.start();
+    engineReachPhase(debug, 'trench');
+    fixture.player().position.y = -130;
+    for (let frame = 0; frame < 6; frame++) debug.step(0.025);
+    assert.equal(game.getSnapshot().mode, 'defeat');
+    assert.match(game.getSnapshot().reason, /пол траншеи/);
+    assert.ok(fixture.audioCalls.some(call => call.name === 'crash'), 'A crash needs its own audio cue');
+  } finally { fixture.close(); }
+});
+
+test('scraping the trench ceiling from inside stays survivable', async () => {
+  const fixture = await engineHarness();
+  try {
+    const { game, debug } = fixture;
+    game.start();
+    engineReachPhase(debug, 'trench');
+    fixture.player().position.x = 0;
+    fixture.player().position.y = 110;
+    for (let frame = 0; frame < 12; frame++) debug.step(0.025);
+    assert.equal(game.getSnapshot().mode, 'playing');
+  } finally { fixture.close(); }
+});
+
+test('the snapshot exposes session firing accuracy counters', async () => {
+  const fixture = await engineHarness();
+  try {
+    const { game, debug } = fixture;
+    game.start();
+    debug.step(1);
+    fixture.key('Space');
+    for (let frame = 0; frame < 40 && game.getSnapshot().accuracy.shots < 1; frame++) debug.step(0.025);
+    fixture.key('Space', false);
+    const accuracy = game.getSnapshot().accuracy;
+    assert.ok(accuracy.shots >= 1);
+    assert.ok(Number.isFinite(accuracy.shots) && Number.isFinite(accuracy.hits));
+    assert.ok(accuracy.hits >= 0);
+    // A fresh sortie resets both counters together with the kills.
+    game.restart();
+    assert.deepEqual(game.getSnapshot().accuracy, { shots: 0, hits: 0 });
   } finally { fixture.close(); }
 });
