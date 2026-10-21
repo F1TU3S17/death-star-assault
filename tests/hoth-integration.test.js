@@ -107,6 +107,54 @@ test('Episode V: the tow QTE cables the walker and the machine falls', async () 
   } finally { fixture.close(); }
 });
 
+test('Episode V: the ground phase reads as a defence of Echo Base', async () => {
+  const fixture = await engineHarness();
+  try {
+    const { game, debug } = fixture;
+    game.setEpisode('episode5');
+    game.start();
+    debug.advanceMission();
+    debug.step(0.05);
+    const state = game.getSnapshot();
+    assert.equal(state.phase, 'hoth-assault');
+    assert.match(state.mission.title, /Оборон/i, 'the phase is a defence, not an assault on the base');
+    assert.match(state.mission.objective, /Отбейте/i);
+    assert.doesNotMatch(`${state.mission.title} ${state.mission.objective}`, /Уничтожьте|Штурм/i);
+    const ids = state.sideObjectives.map(objective => objective.id);
+    assert.deepEqual([...ids].sort(), ['hoth-shield-generator', 'hoth-siege-gun']);
+    assert.equal(ids.includes('hoth-gun-posts'), false, 'the unreachable side objective is gone');
+    const labels = Object.fromEntries(state.worldMarkers.map(marker => [marker.id, marker.label]));
+    assert.equal(labels['hoth-siege-gun'], 'ОСАДНОЕ ОРУДИЕ');
+    assert.equal(labels['hoth-shield-generator'], 'ГЕНЕРАТОР ЩИТА · CTRL / СКАН');
+  } finally { fixture.close(); }
+});
+
+test('Episode V: AT-STs advance on the shield line from the Imperial side', async () => {
+  const fixture = await engineHarness();
+  try {
+    const { game, debug } = fixture;
+    game.setEpisode('episode5');
+    game.start();
+    debug.advanceMission();
+    const walkers = () => debug.inspect().enemies.filter(enemy => enemy.kind === 'at-st');
+    const before = walkers().map(enemy => enemy.position);
+    assert.equal(before.length, 5);
+    assert.ok(before.every(position => position[2] > -520), 'no walker starts on the landing pad or inside the base');
+    const turrets = debug.inspect().enemies.filter(enemy => enemy.kind === 'turret');
+    assert.ok(turrets.length >= 2);
+    assert.ok(turrets.every(enemy => enemy.position[1] > -1), 'Hoth turrets stand on the snow, not below it');
+    debug.step(1);
+    const after = walkers().map(enemy => enemy.position);
+    assert.ok(after.every((position, index) => position[2] < before[index][2] - 4), 'every walker marches towards the base');
+    const shield = new THREE.Vector3(0, 0, -560);
+    after.forEach((position, index) => {
+      const moved = new THREE.Vector3(position[0] - before[index][0], 0, position[2] - before[index][2]).normalize();
+      const intended = shield.clone().sub(new THREE.Vector3(before[index][0], 0, before[index][2])).normalize();
+      assert.ok(moved.dot(intended) > 0.995, 'walkers head for the shield line, not through the base');
+    });
+  } finally { fixture.close(); }
+});
+
 test('Episode V: the transports leave the pad and the chronicle ends in victory', async () => {
   const fixture = await engineHarness();
   try {

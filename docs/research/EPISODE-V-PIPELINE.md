@@ -74,7 +74,7 @@
 | `src/game/mission-events.js` | Чистый директор миссий: `createMissionDirector` (`:12`), `enterPhase` (`:27`), **поиск по `type`** (`:31`), `recordTargetDestroyed` (`:82`), `update` (`:90`) | Уже создаётся с missions эпизода (`setEpisode`); проверять, что `fieldObjectives` Хота находятся |
 | `src/game/mission-props.js` | `createMissionProp` (`:114`): `scan` (`:26`), `beacon` (`:49`), `vent` (`:67`) | Для скана генератора щита нужен проп `scan` — сцена Хота должна его создать |
 | `src/game/enemy-units.js` | `SPECS` (`:1`), `getEnemyUnitSpec` (`:19`), `chooseEnemyTarget` (`:49`) | Архетип `at-st` при необходимости |
-| `src/game/enemy-fire-control.js` | `getEnemyWeaponProfile` (`:16`), `solveFireSolution` (`:43`), `createTurretBrain` (`:87`) | AT-ST использует `createTurretBrain('light')`; профиль AT-AT — в `at-at.js` |
+| `src/game/enemy-fire-control.js` | `getEnemyWeaponProfile` (`:16`), `solveFireSolution` (`:43`), `createTurretBrain` (`:87`) | AT-ST использует `createTurretBrain('light')` для наведения и собственную обёртку с шагом к линии щита; профиль AT-AT — в `at-at.js` |
 | `src/game/enemy-ai.js` | FSM истержцев (`:63`) | Не используется для AT-AT |
 | `src/game/enemy-squadron.js` | Пары TIE (`:24`) | AT-AT/AT-ST не должны попадать в ростер пар |
 | `src/game/simulation.js` | `absorbDamage` (`:2`), `lethalImpact` (`:14`), `segmentSphereHit` (`:24`), `clampFrameDelta` (`:37`), `createArmament` (`:40`), `splashDamage` (`:134`) | `lethalImpact` уже умеет `kind: 'ground'` — падение на снег |

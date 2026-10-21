@@ -24,6 +24,8 @@ const FORWARD = new THREE.Vector3(0, 0, -1);
 const SQUADRON_SPEAKERS = {
   combat: 'Красный Лидер', surface: 'Золотой Лидер', escort: 'Золотой Два',
   assault: 'Красный Лидер', defend: 'Управление Явина', trench: 'Управление Явина', qte: 'Управление Явина',
+  'hoth-arrival': 'Управление Хота', 'hoth-assault': 'Управление Хота', 'hoth-atat': 'Управление Хота',
+  'hoth-tow': 'Люк Скайуокер', 'hoth-fall': 'Управление Хота', 'hoth-evacuation': 'Управление Хота',
 };
 const UP = new THREE.Vector3(0, 1, 0);
 const AXIS_X = new THREE.Vector3(1, 0, 0);
@@ -243,8 +245,15 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   // The walker is scaled up so it reads as a walking fortress next to the fighters.
   const AT_AT_SCALE = 1.9;
   const AT_AT_RADIUS = { leg: 6, turret: 10.5, body: 26 };
-  // The Rebel base stands on the ice plain ahead of the arrival vector.
-  const hothBase = new THREE.Vector3(0, 0, -1500);
+  const AT_ST_SPEED = 9;
+  const AT_ST_HALT_RADIUS = 120;
+  const AT_ST_GAIT_RATE = 1.6;
+  // The walker's march vector points past Echo Base; a clamp holds it at the
+  // shield line. The AT-ST line uses the shield point itself as its destination.
+  const hothMarchTarget = new THREE.Vector3(0, 0, -1500);
+  const hothShieldLine = -560;
+  const hothShieldPoint = new THREE.Vector3(0, 0, hothShieldLine);
+  const groundHeight = (x, z) => (typeof world.hoth?.heightAt === 'function' ? world.hoth.heightAt(x, z) : 0);
   let powerMode = 'balanced';
   let sfoilsMode = 'auto';
   let sfoilsOpenness = 1;
@@ -355,9 +364,9 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     return entity;
   }
 
-  function spawnTurret(x, z, variant = 'light') {
+  function spawnTurret(x, z, variant = 'light', y = -115) {
     const mesh = createTurret(variant);
-    mesh.position.set(x, -115, z);
+    mesh.position.set(x, y, z);
     scene.add(mesh);
     const unitSpec = getEnemyUnitSpec(variant === 'relay' ? 'relay' : 'turret', variant);
     const entity = { id: `battery-${++entitySerial}`, kind: variant === 'relay' ? 'relay' : 'turret', variant, mesh, health: unitSpec.health, radius: unitSpec.radius, velocity: new THREE.Vector3(), fireTimer: 1.6 + Math.random() * 1.6, seed: Math.random() * 20, stun: 0 };
@@ -418,8 +427,12 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
         scene.add(prop.mesh);
         missionProps.push(prop);
       } else if (objective.kind === 'destroy') {
-        const enemy = spawnTurret(objective.position.x, objective.position.z, 'relay');
-        enemy.mesh.position.set(objective.position.x, objective.position.y, objective.position.z);
+        const position = objective.position || { x: 0, y: -115, z: 0 };
+        const offset = Number.isFinite(position.y) ? position.y : -115;
+        const height = offset + (objective.grounded ? groundHeight(position.x, position.z) : 0);
+        const enemy = spawnTurret(position.x, position.z, objective.variant || 'relay', height);
+        enemy.mesh.position.set(position.x, height, position.z);
+        if (Number.isFinite(objective.scale) && objective.scale > 0) enemy.mesh.scale.setScalar(objective.scale);
         enemy.id = objective.targetId;
         enemy.bonusOnly = true;
       }
@@ -485,7 +498,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     const mesh = world.hoth?.atAt?.group;
     if (!mesh) return null;
     mesh.visible = true;
-    mesh.position.copy(position);
+    mesh.position.set(position.x, groundHeight(position.x, position.z), position.z);
     mesh.quaternion.identity();
     mesh.scale.setScalar(AT_AT_SCALE);
     const unit = createAtAtUnit({ variant, seed: 11, stats: { position: { x: position.x, y: position.y, z: position.z } } });
@@ -539,7 +552,7 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   function updateAtAt(dt) {
     if (!atAt) return;
     const unit = atAt.unit;
-    const decision = unit.update(dt, { playerPosition: player.position, basePosition: hothBase, targetId: 'player', position: atAt.mesh.position });
+    const decision = unit.update(dt, { playerPosition: player.position, basePosition: hothMarchTarget, targetId: 'player', position: atAt.mesh.position });
     const snapshot = unit.getSnapshot();
     atAt.health = snapshot.health;
     atAt.part = snapshot.part || atAt.part;
@@ -547,6 +560,8 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     if (decision.move) {
       atAt.mesh.position.x += decision.move.x * dt;
       atAt.mesh.position.z += decision.move.z * dt;
+      if (atAt.mesh.position.z < hothShieldLine) atAt.mesh.position.z = hothShieldLine;
+      atAt.mesh.position.y = groundHeight(atAt.mesh.position.x, atAt.mesh.position.z);
     }
     if (decision.move && (decision.move.x || decision.move.z)) {
       const heading = new THREE.Vector3(decision.move.x, 0, decision.move.z).normalize();
@@ -598,12 +613,42 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
   /** A two-legged snow trooper walker: a squat body, a gun and two legs. */
   function spawnAtSt(position) {
     const mesh = createAtSt();
-    mesh.position.copy(position);
+    mesh.position.set(position.x, groundHeight(position.x, position.z), position.z);
     scene.add(mesh);
-    const entity = { id: `at-st-${++entitySerial}`, kind: 'at-st', variant: 'walker', mesh, health: 90, radius: 9, velocity: new THREE.Vector3(), fireTimer: 1.4 + Math.random() * 1.4, seed: Math.random() * 20, stun: 0 };
-    entity.brain = createTurretBrain('light', entity.fireTimer);
+    const entity = { id: `at-st-${++entitySerial}`, kind: 'at-st', variant: 'walker', mesh, health: 90, radius: 9, velocity: new THREE.Vector3(), fireTimer: 1.4 + Math.random() * 1.4, seed: Math.random() * 20, stun: 0, gait: Math.random() };
+    const gunner = createTurretBrain('light', entity.fireTimer);
+    // The walker keeps its cannon solution but marches on the shield line: a
+    // static AT-ST read as a gun tower, not as the closing Imperial assault.
+    entity.brain = {
+      update(input, dt) {
+        const decision = gunner.update(input, dt);
+        const deltaX = hothShieldPoint.x - entity.mesh.position.x;
+        const deltaZ = hothShieldPoint.z - entity.mesh.position.z;
+        const distance = Math.hypot(deltaX, deltaZ);
+        if (distance > AT_ST_HALT_RADIUS && dt > 0) {
+          const speed = Math.min(AT_ST_SPEED, (distance - AT_ST_HALT_RADIUS) / dt);
+          decision.move = { x: deltaX / distance * speed, z: deltaZ / distance * speed };
+        }
+        return decision;
+      },
+      reset: gunner.reset,
+    };
     enemies.push(entity);
     return entity;
+  }
+
+  /** Alternating two-leg gait; the knee lifts on the swing half of the cycle. */
+  function animateAtStLegs(enemy, dt) {
+    const legs = enemy.mesh.userData.legs || [];
+    enemy.gait = ((Number.isFinite(enemy.gait) ? enemy.gait : 0) + dt * AT_ST_GAIT_RATE) % 1;
+    legs.forEach((leg, index) => {
+      const cycle = (enemy.gait + index * 0.5) % 1;
+      const swing = Math.sin(cycle * Math.PI * 2);
+      const lift = Math.max(0, Math.cos(cycle * Math.PI * 2));
+      if (leg.hip) leg.hip.rotation.x = swing * 0.34;
+      if (leg.knee) leg.knee.rotation.x = -0.15 - lift * 0.5;
+    });
+    if (enemy.mesh.userData.head) enemy.mesh.userData.head.position.y = 10.1 + Math.sin(enemy.gait * Math.PI * 4) * 0.12;
   }
 
   function setupPhase(phase) {
@@ -697,13 +742,15 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
     } else if (phase === 'hoth-assault') {
       player.position.set(0, 80, 780);
       player.quaternion.identity();
-      spawnAtSt(new THREE.Vector3(-120, 0, 120));
-      spawnAtSt(new THREE.Vector3(300, 0, -320));
-      spawnAtSt(new THREE.Vector3(160, 0, -180));
-      spawnAtSt(new THREE.Vector3(-40, 0, -520));
-      spawnAtSt(new THREE.Vector3(220, 0, -760));
-      spawnTurret(-260, -260);
-      spawnTurret(280, -980, 'heavy');
+      // The Imperial line advances across the plain towards the shield line;
+      // no walker spawns inside the base or on the landing pad.
+      spawnAtSt(new THREE.Vector3(-180, 0, 300));
+      spawnAtSt(new THREE.Vector3(240, 0, 200));
+      spawnAtSt(new THREE.Vector3(-20, 0, 60));
+      spawnAtSt(new THREE.Vector3(-280, 0, -80));
+      spawnAtSt(new THREE.Vector3(180, 0, -220));
+      spawnTurret(360, 300, 'light', groundHeight(360, 300) + 5);
+      spawnTurret(-360, -140, 'heavy', groundHeight(-360, -140) + 7.5);
       for (let i = 0; i < 2; i++) spawnTie(new THREE.Vector3((i - 0.5) * 320, 120, 200 - i * 320));
     } else if (phase === 'hoth-atat') {
       player.position.set(0, 34, 620);
@@ -869,9 +916,9 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       sideObjectives: [...(state.sideObjectives || []), ...content.sideObjectives], content,
       worldMarkers: [...(coordination.pendingReinforcement ? enemies.filter(enemy => enemy.id === coordination.pendingReinforcement.enemyId).map(enemy => ({ id: 'reinforcement-caller', position: enemy.mesh.position, label: `ВЫЗОВ ПОДКРЕПЛЕНИЯ · ${coordination.pendingReinforcement.remaining.toFixed(1)} С` })) : []), ...(state.phase === 'escort' ? enemies.filter(enemy => !enemy.disabled && ['escort-route-battery', 'escort-power-node'].includes(enemy.id)).map(enemy => ({ id: enemy.id, position: enemy.mesh.position, label: enemy.id === 'escort-route-battery' ? 'ТЯЖЁЛАЯ БАТАРЕЯ' : 'ПИТАЮЩИЙ УЗЕЛ · ЩИТЫ +25' })) : []), ...content.sideObjectives.flatMap(objective => {
         if (objective.status !== 'active') return [];
-        if (objective.kind === 'scan') return [{ id: objective.id, position: objective.position, label: 'ДАТЧИК · CTRL / СКАН', progress: objective.progress / objective.target }];
+        if (objective.kind === 'scan') return [{ id: objective.id, position: objective.position, label: objective.markerLabel || 'ДАТЧИК · CTRL / СКАН', progress: objective.progress / objective.target }];
         const ids = objective.targetIds || [objective.targetId];
-        return enemies.filter(enemy => ids.includes(enemy.id)).map(enemy => ({ id: enemy.id, position: enemy.mesh.position, label: objective.kind === 'destroy' ? 'РЕГУЛЯТОР' : 'ФЛАНГОВЫЙ TIE' }));
+        return enemies.filter(enemy => ids.includes(enemy.id)).map(enemy => ({ id: enemy.id, position: enemy.mesh.position, label: objective.markerLabel || (objective.kind === 'destroy' ? 'РЕГУЛЯТОР' : 'ФЛАНГОВЫЙ TIE') }));
       }), ...missionProps.filter(prop => prop.kind === 'vent' && (content.vent?.active || content.vent?.telegraph)).map(prop => ({ id: prop.id, position: { x: prop.mesh.position.x, y: -45, z: prop.mesh.position.z }, label: content.vent.active ? 'ОПАСНО · СБРОС' : 'СБРОС · УЙДИТЕ ВПРАВО' }))].flatMap(marker => {
         const point = new THREE.Vector3(marker.position.x, marker.position.y, marker.position.z);
         const distance = point.distanceTo(player.position);
@@ -1410,11 +1457,23 @@ export function createGame({ canvas, ships = SHIPS, onSnapshot = () => {}, onEve
       } else {
         const head = enemy.mesh.userData.head;
         enemy.mesh.updateMatrixWorld(true);
-        if (head) firingOrigin.copy(head.localToWorld(new THREE.Vector3(0, enemy.variant === 'heavy' ? 4 : 3, 0)));
+        if (head) {
+          const muzzle = enemy.kind === 'at-st'
+            ? new THREE.Vector3(0, -0.75, -4.4)
+            : new THREE.Vector3(0, enemy.variant === 'heavy' ? 4 : 3, 0);
+          firingOrigin.copy(head.localToWorld(muzzle));
+        }
         const barrelQuaternion = head ? head.getWorldQuaternion(new THREE.Quaternion()) : enemy.mesh.quaternion;
         const decision = enemy.brain.update({ position: firingOrigin,
           forward: FORWARD.clone().applyQuaternion(barrelQuaternion),
           target: { id: enemy.aiTarget, position: targetPosition, velocity: targetVelocity }, relayBonus }, dt);
+        if (decision.move && (decision.move.x || decision.move.z)) {
+          const heading = new THREE.Vector3(decision.move.x, 0, decision.move.z).normalize();
+          enemy.mesh.quaternion.setFromUnitVectors(FORWARD, heading);
+          enemy.mesh.position.addScaledVector(heading, Math.hypot(decision.move.x, decision.move.z) * dt);
+          enemy.mesh.position.y = groundHeight(enemy.mesh.position.x, enemy.mesh.position.z);
+          if (enemy.kind === 'at-st') animateAtStLegs(enemy, dt);
+        }
         direction = new THREE.Vector3(decision.aimDirection.x, decision.aimDirection.y, decision.aimDirection.z);
         if (head) {
           const attitude = new THREE.Quaternion().setFromUnitVectors(FORWARD, new THREE.Vector3(decision.direction.x, decision.direction.y, decision.direction.z));

@@ -116,6 +116,20 @@ function fbm(x, y, seed, octaves = 3) {
 }
 
 /**
+ * Height of the procedural snow field at world (x, z).
+ *
+ * The engine shares this function so walkers, turrets and props stand on the
+ * same dunes the mesh is built from instead of floating above or sinking
+ * below the surface. The plain is flat around Echo Base.
+ */
+export function hothTerrainHeight(x, z, seed = 20261021) {
+  const dunes = fbm(x * 0.0016, z * 0.0016, seed, 3) - 0.5;
+  const ridges = Math.abs(fbm(x * 0.0041 + 31, z * 0.0041 - 17, seed + 7, 2) - 0.5) * 2;
+  const plateau = THREE.MathUtils.smoothstep(Math.hypot(x, z - BASE_Z), 150, 430);
+  return (dunes * 6.5 + ridges * 1.6) * plateau;
+}
+
+/**
  * Merge a list of primitive parts into one non-indexed BufferGeometry.
  * Parts are described as `{ geometry, position, rotation, scale }`.
  */
@@ -564,11 +578,7 @@ export function createHothScene(scene, options = {}) {
   for (let index = 0; index < terrainPositions.count; index++) {
     const x = terrainPositions.getX(index);
     const z = terrainPositions.getZ(index);
-    const dunes = fbm(x * 0.0016, z * 0.0016, seed, 3) - 0.5;
-    const ridges = Math.abs(fbm(x * 0.0041 + 31, z * 0.0041 - 17, seed + 7, 2) - 0.5) * 2;
-    // The plain stays flat around the base so the base never drowns in snow.
-    const plateau = THREE.MathUtils.smoothstep(Math.hypot(x, z - BASE_Z), 150, 430);
-    terrainPositions.setY(index, (dunes * 6.5 + ridges * 1.6) * plateau);
+    terrainPositions.setY(index, hothTerrainHeight(x, z, seed));
   }
   terrainGeometry.computeVertexNormals();
   const terrain = new THREE.Mesh(terrainGeometry, snowMaterial);
@@ -1112,6 +1122,7 @@ export function createHothScene(scene, options = {}) {
     setPhase,
     launchTransport,
     setAtAtCabled,
+    heightAt: (x, z) => hothTerrainHeight(x, z, seed),
     getSnapshot,
     dispose,
   };

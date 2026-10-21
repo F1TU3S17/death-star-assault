@@ -994,31 +994,66 @@ export function createTurret(kind = 'light') {
   return root;
 }
 
-/** Imperial snow walker: squat hull, open cockpit, blaster and two reverse-jointed legs. */
+/**
+ * Imperial snow walker: squat hull, sloped cockpit, twin chin blasters and two
+ * reverse-jointed legs. The model faces local -Z, like every other ship here,
+ * and its feet rest on y = 0.
+ */
 export function createAtSt() {
   const root = new THREE.Group();
   const head = new THREE.Group();
   const visor = new THREE.MeshStandardMaterial({ color: 0x8f2418, emissive: 0xc03a22, emissiveIntensity: 0.9, roughness: 0.5, metalness: 0.2 });
-  box(root, dark, 0, 7.2, -0.6, 8, 4.4, 10);
-  box(root, silver, 0, 9.6, -1.6, 5.6, 1.1, 6.2);
-  box(root, red, 0, 5.4, 4.4, 3.2, 1.4, 2.2);
-  box(head, silver, 0, 0, 0, 5.4, 3, 4.6);
-  box(head, visor, 0, 0.4, 2.2, 4, 1.1, 0.5);
-  cylinder(head, dark, 0.5, 5, 0, -0.6, 4);
-  head.position.set(0, 8.2, 3);
+  const engineGlow = new THREE.MeshStandardMaterial({ color: 0x3d4c52, emissive: 0x6fd0ff, emissiveIntensity: 0.55, roughness: 0.6 });
+
+  // Hull: armoured slab, sloped roof and the engine deck at the rear (+Z).
+  box(root, dark, 0, 9.2, 0, 7, 3.2, 8);
+  box(root, silver, 0, 11.1, 0.4, 6, 1.2, 6.4);
+  box(root, dark, 0, 7.7, 0.2, 5.2, 1, 6.6);
+  box(root, silver, 0, 9.7, 4.1, 4.6, 2.2, 2);
+  for (const x of [-1.4, 0, 1.4]) box(root, engineGlow, x, 9.8, 5.12, 0.7, 1.1, 0.12);
+  for (const side of [-1, 1]) {
+    box(root, silver, side * 4, 9.3, -0.4, 1.5, 2, 4.4);
+    box(root, dark, side * 4, 10.3, -2.2, 1.1, 0.7, 1.6);
+  }
+
+  // Cockpit: forward is local -Z, with the red viewport slit and chin guns.
+  head.position.set(0, 10.1, -3);
+  box(head, silver, 0, 0, 0, 5.2, 2.6, 4.2);
+  box(head, dark, 0, 1.35, 0.4, 4.4, 0.7, 3.2);
+  box(head, visor, 0, 0.35, -2.14, 4, 0.85, 0.3);
+  box(head, dark, 0, -1.05, -1.3, 1.1, 0.9, 2.4);
+  for (const side of [-1, 1]) {
+    const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 3.6, 8), dark);
+    gun.rotation.x = Math.PI / 2;
+    gun.position.set(side * 1.25, -0.75, -2.7);
+    head.add(gun);
+    box(head, silver, side * 1.9, -0.15, -0.6, 0.5, 1.1, 2.2);
+  }
+  box(head, silver, 1.9, 2.05, 0.5, 0.12, 2.2, 0.12);
+
+  const legs = [];
   for (const side of [-1, 1]) {
     const hip = new THREE.Group();
-    hip.position.set(side * 3.2, 6, -0.4);
-    box(hip, silver, 0, -2, 0, 1.9, 4.2, 1.9);
+    hip.position.set(side * 3.1, 7.4, 0);
+    box(hip, silver, 0, -0.1, 0, 1.8, 1.4, 2.2);
+    box(hip, silver, side * 0.2, -1.9, 0, 1.5, 3.6, 1.7);
     const knee = new THREE.Group();
-    knee.position.set(0, -4.1, 0);
-    box(knee, dark, 0, -1.8, 0.5, 1.5, 3.8, 1.5);
-    box(knee, silver, 0, -3.7, 1, 2.3, 0.7, 3.2);
+    knee.position.set(side * 0.2, -3.8, 0);
+    box(knee, dark, 0, -0.1, 0, 1.9, 1.3, 1.9);
+    box(knee, silver, 0, -1.5, -0.2, 1.2, 3, 1.3);
+    const foot = new THREE.Group();
+    foot.position.set(0, -3, -0.5);
+    box(foot, dark, 0, -0.15, -0.3, 2.6, 0.7, 3.4);
+    box(foot, silver, 0, -0.5, -0.1, 3, 0.35, 4);
+    for (const toe of [-0.9, 0, 0.9]) box(foot, dark, toe, -0.25, -2, 0.5, 0.45, 1.2);
+    knee.add(foot);
     hip.add(knee);
     root.add(hip);
+    legs.push({ hip, knee, foot });
   }
   root.add(head);
   root.userData.head = head;
+  root.userData.legs = legs;
   root.userData.kind = 'at-st';
   root.traverse(object => { if (object.isMesh) { object.castShadow = true; object.receiveShadow = true; } });
   return root;
